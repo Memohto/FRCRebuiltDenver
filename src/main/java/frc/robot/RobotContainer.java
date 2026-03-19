@@ -27,6 +27,7 @@ import frc.robot.constants.Constants;
 import frc.robot.constants.IndexerConstants;
 import frc.robot.constants.IntakeConstants;
 import frc.robot.constants.ShooterConstants;
+import frc.robot.constants.TejuinoConstants;
 import frc.robot.constants.TunerConstants;
 import frc.robot.constants.TurretConstants;
 import frc.robot.subsystems.drive.Drive;
@@ -47,6 +48,10 @@ import frc.robot.subsystems.shooter.Shooter;
 import frc.robot.subsystems.shooter.ShooterIO;
 import frc.robot.subsystems.shooter.ShooterIOSim;
 import frc.robot.subsystems.shooter.ShooterIOTalonFX;
+import frc.robot.subsystems.tejuino.TejuinoIO;
+import frc.robot.subsystems.tejuino.TejuinoIOReal;
+import frc.robot.subsystems.tejuino.TejuinoIOSim;
+import frc.robot.subsystems.tejuino.Tejuino;
 import frc.robot.subsystems.turret.Turret;
 import frc.robot.subsystems.turret.TurretIO;
 import frc.robot.subsystems.turret.TurretIOSim;
@@ -76,6 +81,9 @@ public class RobotContainer {
   private final Indexer indexer;
   private final Turret turret;
   private final Shooter shooter;
+  
+  private final Tejuino tejuino;
+
 
   private final CommandXboxController driverJoystick = new CommandXboxController(0);
   private final CommandXboxController mechanismsJoystick = new CommandXboxController(1);
@@ -122,6 +130,9 @@ public class RobotContainer {
             new ShooterIOTalonFX(
                 TurretConstants.flywheelCanId,
                 TurretConstants.hoodCanId));
+
+        tejuino = new Tejuino(new TejuinoIOReal(), TejuinoConstants.DEVICE_NUMBER);
+
         break;
 
       case SIM:
@@ -142,6 +153,9 @@ public class RobotContainer {
         indexer = new Indexer(new IndexerIOSim());
         shooter = new Shooter(new ShooterIOSim());
         turret = new Turret(new TurretIOSim(), new ShooterIOSim());
+
+        tejuino = new Tejuino(new TejuinoIOSim(), TejuinoConstants.DEVICE_NUMBER);
+
         break;
 
       default:
@@ -160,6 +174,9 @@ public class RobotContainer {
         indexer = new Indexer(new IndexerIOSim() {});
         shooter = new Shooter(new ShooterIOSim() {});
         turret  = new Turret(new TurretIOSim() {}, new ShooterIOSim() {});
+
+        tejuino = new Tejuino(new TejuinoIO() {}, TejuinoConstants.DEVICE_NUMBER);
+
         break; // FIX 4: added missing break
     }
 
