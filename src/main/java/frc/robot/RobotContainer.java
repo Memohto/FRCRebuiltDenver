@@ -7,9 +7,9 @@
 
 package frc.robot;
 
-import static frc.robot.subsystems.vision.VisionConstants.*;
-
 import com.pathplanner.lib.auto.AutoBuilder;
+import com.pathplanner.lib.auto.NamedCommands;
+
 import edu.wpi.first.math.geometry.Pose2d;
 import edu.wpi.first.math.geometry.Rotation2d;
 import edu.wpi.first.wpilibj.DriverStation;
@@ -21,17 +21,42 @@ import edu.wpi.first.wpilibj2.command.Commands;
 import edu.wpi.first.wpilibj2.command.button.CommandXboxController;
 import edu.wpi.first.wpilibj2.command.sysid.SysIdRoutine;
 import frc.robot.commands.DriveCommands;
-import frc.robot.generated.TunerConstants;
+import frc.robot.commands.IndexerCommands;
+import frc.robot.commands.ShooterCommands;
+import frc.robot.constants.Constants;
+import frc.robot.constants.IndexerConstants;
+import frc.robot.constants.IntakeConstants;
+import frc.robot.constants.ShooterConstants;
+import frc.robot.constants.TunerConstants;
+import frc.robot.constants.TurretConstants;
 import frc.robot.subsystems.drive.Drive;
 import frc.robot.subsystems.drive.GyroIO;
 import frc.robot.subsystems.drive.GyroIOPigeon2;
 import frc.robot.subsystems.drive.ModuleIO;
 import frc.robot.subsystems.drive.ModuleIOSim;
 import frc.robot.subsystems.drive.ModuleIOTalonFX;
+import frc.robot.subsystems.indexer.Indexer;
+import frc.robot.subsystems.indexer.IndexerIO;
+import frc.robot.subsystems.indexer.IndexerIOSim;
+import frc.robot.subsystems.indexer.IndexerIOTalonFX;
+import frc.robot.subsystems.intake.Intake;
+import frc.robot.subsystems.intake.IntakeIO;
+import frc.robot.subsystems.intake.IntakeIOSim;
+import frc.robot.subsystems.intake.IntakeIOTalonFX;
+import frc.robot.subsystems.shooter.Shooter;
+import frc.robot.subsystems.shooter.ShooterIO;
+import frc.robot.subsystems.shooter.ShooterIOSim;
+import frc.robot.subsystems.shooter.ShooterIOTalonFX;
+import frc.robot.subsystems.turret.Turret;
+import frc.robot.subsystems.turret.TurretIO;
+import frc.robot.subsystems.turret.TurretIOSim;
+import frc.robot.subsystems.turret.TurretIOTalonFX;
 import frc.robot.subsystems.vision.Vision;
 import frc.robot.subsystems.vision.VisionIO;
 import frc.robot.subsystems.vision.VisionIOLimelight;
 import frc.robot.subsystems.vision.VisionIOPhotonVisionSim;
+
+import static frc.robot.constants.VisionConstants.*;
 
 import org.littletonrobotics.junction.Logger;
 import org.littletonrobotics.junction.networktables.LoggedDashboardChooser;
@@ -47,8 +72,13 @@ public class RobotContainer {
   private final Drive drive;
   private Vision vision;
 
-  // Controller
-  private final CommandXboxController controller = new CommandXboxController(0);
+  private final Intake intake;
+  private final Indexer indexer;
+  private final Turret turret;
+  private final Shooter shooter;
+
+  private final CommandXboxController driverJoystick = new CommandXboxController(0);
+  private final CommandXboxController mechanismsJoystick = new CommandXboxController(1);
 
   // Dashboard inputs
   private final LoggedDashboardChooser<Command> autoChooser;
@@ -58,8 +88,6 @@ public class RobotContainer {
     switch (Constants.currentMode) {
       case REAL:
         // Real robot, instantiate hardware IO implementations
-        // ModuleIOTalonFX is intended for modules with TalonFX drive, TalonFX turn, and
-        // a CANcoder
         drive =
             new Drive(
                 new GyroIOPigeon2(),
@@ -71,6 +99,29 @@ public class RobotContainer {
             new Vision(
                 drive::addVisionMeasurement,
                 new VisionIOLimelight(camera0Name, drive::getRotation));
+
+        intake = new Intake(new IntakeIOTalonFX(
+            IntakeConstants.rollersCanId,
+            IntakeConstants.extensorCanId
+        ));
+        indexer = new Indexer(new IndexerIOTalonFX(
+            IndexerConstants.rollersCanId,
+            IndexerConstants.shooterWheelsCanId,
+            IndexerConstants.turretWheelsCanId,
+            IndexerConstants.feederCanId
+        ));
+        shooter = new Shooter(new ShooterIOTalonFX(
+            ShooterConstants.flywheelCanId,
+            ShooterConstants.hoodCanId
+        ));
+        turret = new Turret(
+            new TurretIOTalonFX(
+                TurretConstants.flywheelCanId,
+                TurretConstants.hoodCanId,
+                TurretConstants.rotationMotorCanId),
+            new ShooterIOTalonFX(
+                TurretConstants.flywheelCanId,
+                TurretConstants.hoodCanId));
         break;
 
       case SIM:
@@ -86,6 +137,11 @@ public class RobotContainer {
             new Vision(
                 drive::addVisionMeasurement,
                 new VisionIOPhotonVisionSim(camera0Name, robotToCamera0, drive::getPose));
+
+        intake = new Intake(new IntakeIOSim());
+        indexer = new Indexer(new IndexerIOSim());
+        shooter = new Shooter(new ShooterIOSim());
+        turret = new Turret(new TurretIOSim(), new ShooterIOSim());
         break;
 
       default:
@@ -98,11 +154,31 @@ public class RobotContainer {
                 new ModuleIO() {},
                 new ModuleIO() {});
         vision = new Vision(drive::addVisionMeasurement, new VisionIO() {}, new VisionIO() {});
-        break;
+
+        // FIX 3: assign all final subsystem fields in default case to avoid compile error
+        intake  = new Intake(new IntakeIOSim() {});
+        indexer = new Indexer(new IndexerIOSim() {});
+        shooter = new Shooter(new ShooterIOSim() {});
+        turret  = new Turret(new TurretIOSim() {}, new ShooterIOSim() {});
+        break; // FIX 4: added missing break
     }
 
-    // Set up auto routines
+    // FIX 2: initialize autoChooser BEFORE calling addOption on it
     autoChooser = new LoggedDashboardChooser<>("Auto Choices", AutoBuilder.buildAutoChooser());
+
+    // FIX 1: NamedCommands registrations moved outside switch so they always execute
+    NamedCommands.registerCommand("StartFlywheels", Commands.runOnce(
+        () -> {
+            shooter.startFlywheel();
+            turret.startFlywheel();
+        }, shooter, turret).withTimeout(2));
+    NamedCommands.registerCommand("IndexBoth", Commands.sequence(
+        Commands.runOnce(() -> { indexer.intake(); }, indexer),
+        Commands.runOnce(() -> { indexer.indexBoth(); }, indexer),
+        Commands.waitSeconds(1),
+        Commands.runOnce(() -> { indexer.outtake(); }, indexer),
+        Commands.waitSeconds(0.25)
+    ).repeatedly().withTimeout(22));
 
     // Set up SysId routines
     autoChooser.addOption(
@@ -135,25 +211,25 @@ public class RobotContainer {
     drive.setDefaultCommand(
         DriveCommands.joystickDrive(
             drive,
-            () -> -controller.getLeftY(),
-            () -> -controller.getLeftX(),
-            () -> -controller.getRightX()));
+            () -> -driverJoystick.getLeftY(),
+            () -> -driverJoystick.getLeftX(),
+            () -> -driverJoystick.getRightX()));
 
     // Lock to 0° when A button is held
-    controller
+    driverJoystick
         .a()
         .whileTrue(
             DriveCommands.joystickDriveAtAngle(
                 drive,
-                () -> -controller.getLeftY(),
-                () -> -controller.getLeftX(),
+                () -> -driverJoystick.getLeftY(),
+                () -> -driverJoystick.getLeftX(),
                 () -> Rotation2d.kZero));
 
     // Switch to X pattern when X button is pressed
-    controller.x().onTrue(Commands.runOnce(drive::stopWithX, drive));
+    driverJoystick.x().onTrue(Commands.runOnce(drive::stopWithX, drive));
 
-    // Reset gyro to 0° when B button is pressed
-    controller
+    // Reset gyro to 0° when B button is pressed
+    driverJoystick
         .b()
         .onTrue(
             Commands.runOnce(
@@ -166,6 +242,86 @@ public class RobotContainer {
                     },
                     drive)
                 .ignoringDisable(true));
+
+    shooter.setDefaultCommand(
+        ShooterCommands.joystickShooterCmd(
+            shooter, turret,
+            () -> mechanismsJoystick.x().getAsBoolean(),
+            () -> driverJoystick.leftTrigger(0.5).getAsBoolean(),
+            () -> driverJoystick.rightTrigger(0.5).getAsBoolean(),
+            () -> driverJoystick.a().getAsBoolean(),
+            () -> driverJoystick.b().getAsBoolean())
+    );
+
+    // Spin up flywheels (debug)
+    mechanismsJoystick.povUp()
+        .whileTrue(
+            Commands.runEnd(
+                () -> {
+                    shooter.debugFlywheel();
+                    turret.debugFlywheel();
+                },
+                () -> {
+                    shooter.stopFlywheel();
+                    turret.stopFlywheel();
+                },
+                shooter, turret));
+
+    // Outtake ball from indexer (Fallback)
+    mechanismsJoystick.rightTrigger(0.5)
+        .whileTrue(
+            Commands.runEnd(
+                () -> {
+                    indexer.outtake();
+                },
+                () -> {
+                    indexer.stopIndexer();
+                },
+                indexer));
+
+    // Intake
+    mechanismsJoystick.leftTrigger(0.5)
+        .whileTrue(
+            Commands.runEnd(
+                () -> {
+                    intake.intake();
+                }, () -> {
+                    intake.stopRollers();
+                },
+                intake));
+
+    // Extend
+    mechanismsJoystick.a()
+        .whileTrue(
+            Commands.runEnd(
+                () -> {
+                    intake.extend();
+                },
+                () -> {
+                    intake.stopExtensor();
+                },
+                intake));
+
+    // Retract
+    mechanismsJoystick.b()
+        .whileTrue(
+            Commands.runEnd(
+                () -> {
+                    intake.retract();
+                },
+                () -> {
+                    intake.stopExtensor();
+                },
+                intake));
+
+    // Shoot
+    indexer.setDefaultCommand(
+        IndexerCommands.joystickIndexerCmd(
+            indexer,
+            () -> mechanismsJoystick.leftBumper().getAsBoolean(),
+            () -> mechanismsJoystick.rightBumper().getAsBoolean()
+        )
+    );
   }
 
   /**
