@@ -59,6 +59,8 @@ import edu.wpi.first.wpilibj.smartdashboard.SmartDashboard;
 
 import static frc.robot.constants.VisionConstants.*;
 
+import static frc.robot.constants.VisionConstants.*;
+
 import org.littletonrobotics.junction.Logger;
 import org.littletonrobotics.junction.networktables.LoggedDashboardChooser;
 
