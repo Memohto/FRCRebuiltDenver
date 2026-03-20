@@ -12,7 +12,7 @@ import edu.wpi.first.wpilibj2.command.Command.InterruptionBehavior;
 import edu.wpi.first.wpilibj2.command.Commands;
 
 import frc.robot.subsystems.shooter.Shooter;
-import frc.robot.subsystems.drive.Drive;
+import frc.robot.subsystems.drive.swerve.Swerve;
 import frc.robot.subsystems.indexer.Indexer;
 import frc.robot.subsystems.turret.Turret;
 
@@ -34,7 +34,7 @@ public class shootingSecuenceCommand {
     }
 
     public static Command shootingturretCommand(
-        Drive swerve,
+        Swerve swerve,
         Turret turret,
         Shooter shooter,
         Indexer indexer,
@@ -43,19 +43,28 @@ public class shootingSecuenceCommand {
         BooleanSupplier shootSupplier) {
         
         return Commands.run(() -> {
-            // Lógica de cálculo de ángulo
-            Rotation2d targetRotation;
+            // Lógica de cálculo de ángulo (raw radians — no Rotation2d wrap)
+            double targetRad;
             if (aimTurretSupplier.getAsBoolean()) {
                 Pose2d outpostPose = new Pose2d(4.625, 4.035, new Rotation2d());
                 Pose2d robotPose = swerve.getPose();
+                // .minus() returns robot-relative deltas — heading is already factored out
                 Transform2d deltaPose = outpostPose.minus(robotPose);
-                targetRotation = Rotation2d.fromRadians(Math.atan2(deltaPose.getY(), deltaPose.getX()));
-                Logger.recordOutput("Debug/Turret/TargetRotation", targetRotation);
+                double angleInRobotFrame = Math.atan2(deltaPose.getY(), deltaPose.getX());
+                double rawAngle = angleInRobotFrame - frc.robot.constants.TurretConstants.turretZeroOffsetRad;
+
+                // Normalize into turret's valid range [minRotationRad, maxRotationRad]
+                double min = frc.robot.constants.TurretConstants.minRotationRad;
+                double shifted = rawAngle - min;
+                shifted = shifted - Math.floor(shifted / (2.0 * Math.PI)) * (2.0 * Math.PI);
+                targetRad = shifted + min;
+
+                Logger.recordOutput("Debug/Turret/TargetRotationDeg", Math.toDegrees(targetRad));
             } else {
-                targetRotation = Rotation2d.kZero;
+                targetRad = 0.0;
             }
 
-            turret.rotateToAngle(targetRotation);
+            turret.rotateToAngle(targetRad);
 
             // Lógica de Flywheels
             if (warmUpSupplier.getAsBoolean()) {
@@ -104,7 +113,7 @@ public class shootingSecuenceCommand {
 /**
  * Dispara con ambos sistemas a la vez (Turret + Fixed Shooter).
  */
-public static Command shootingSequenceBoth(Drive swerve, Turret turret, Shooter shooter, Indexer indexer) {
+public static Command shootingSequenceBoth(Swerve swerve, Turret turret, Shooter shooter, Indexer indexer) {
     return shootingturretCommand(
         swerve, 
         turret, 
@@ -119,7 +128,7 @@ public static Command shootingSequenceBoth(Drive swerve, Turret turret, Shooter 
 /**
      * Dispara solo con el Shooter fijo.
      */
-    public static Command shootingSequenceFixedCommand(Drive swerve, Turret turret, Shooter shooter, Indexer indexer) {
+    public static Command shootingSequenceFixedCommand(Swerve swerve, Turret turret, Shooter shooter, Indexer indexer) {
         return shootingturretCommand(
             swerve, 
             turret, 
@@ -134,7 +143,7 @@ public static Command shootingSequenceBoth(Drive swerve, Turret turret, Shooter 
     /**
      * Dispara solo con la Torreta.
      */
-    public static Command shootingSequenceTurretCommand(Drive swerve, Turret turret, Shooter shooter, Indexer indexer) {
+    public static Command shootingSequenceTurretCommand(Swerve swerve, Turret turret, Shooter shooter, Indexer indexer) {
         return shootingturretCommand(
             swerve, 
             turret, 

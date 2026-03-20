@@ -33,7 +33,7 @@ public class TransitionShift {
         if (timeLeft > SHIFT_2_START) return "SHIFT 1";
         if (timeLeft > SHIFT_3_START) return "SHIFT 2";
         if (timeLeft > SHIFT_4_START) return "SHIFT 3";
-        if (timeLeft > END_GAME_START) return "SHIFT 4";s
+        if (timeLeft > END_GAME_START) return "SHIFT 4";
         return "END GAME";
     }
 
