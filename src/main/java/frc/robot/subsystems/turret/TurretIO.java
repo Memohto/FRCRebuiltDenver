@@ -9,13 +9,8 @@ import frc.robot.subsystems.shooter.ShooterIO.ShooterIOInputs;
 public interface TurretIO {
     public static class TurretIOInputs {
         public boolean rotationMotorConnected = false;
-
-        /** Turret position as Rotation2d — WARNING: wraps at ±180°, use for display only. */
         public Rotation2d rotationMotorPosition = new Rotation2d();
-
-        /** Turret position in raw radians — NOT wrapped. Use this for control logic. */
         public double rotationMotorPositionRad = 0.0;
-
         public double rotationMotorVelocityRadPerSec = 0.0;
         public double rotationMotorAppliedVolts = 0.0;
         public double rotationMotorCurrentAmps = 0.0;
@@ -44,13 +39,6 @@ public interface TurretIO {
     }
 
     public void updateInputs(ShooterIOInputs shooterInputs, TurretIOInputs turretInputs);
-
-    /**
-     * Command turret to an absolute position in radians.
-     * Uses raw double to avoid Rotation2d's ±180° wrapping.
-     * The value must be within [minRotationRad, maxRotationRad].
-     */
     public void setRotationMotorPosition(double positionRad);
-
     public void setRotationMotorOpenLoop(double speed);
 }

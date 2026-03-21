@@ -29,6 +29,10 @@ public class Shooter extends SubsystemBase {
         io.setFlywheelOpenLoop(ShooterConstants.flywheelSpeed);
     }
 
+    public void startFlywheelAtSpeed(double speed) {
+        io.setFlywheelOpenLoop(speed);
+    }
+
     public void debugFlywheel() {
         io.setFlywheelOpenLoop(0.25);
     }

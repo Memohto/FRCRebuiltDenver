@@ -39,8 +39,8 @@ public class TurretIOSim implements TurretIO {
             TurretConstants.maxRotationRad);
 
         turretInputs.rotationMotorConnected = true;
-        turretInputs.rotationMotorPositionRad = rotationPositionRad;
         turretInputs.rotationMotorPosition = Rotation2d.fromRadians(rotationPositionRad);
+        turretInputs.rotationMotorPositionRad = rotationPositionRad;
         turretInputs.rotationMotorVelocityRadPerSec = rotationMotorSim.getAngularVelocityRadPerSec();
         turretInputs.rotationMotorAppliedVolts = appliedVolts;
         turretInputs.rotationMotorCurrentAmps = rotationMotorSim.getCurrentDrawAmps();

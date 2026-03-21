@@ -31,27 +31,23 @@ public class Turret extends Shooter {
         visualizer.updateVisualization(new Rotation3d(turretInputs.rotationMotorPosition));
     }
 
-    /** Returns turret position as Rotation2d (wraps at ±180° — display only). */
     public Rotation2d getRotation() {
         return turretInputs.rotationMotorPosition;
     }
 
-    /** Returns turret position in raw radians (NOT wrapped — use for control logic). */
-    public double getRotationRad() {
+    public double getPositionRad() {
         return turretInputs.rotationMotorPositionRad;
     }
 
-    /** Open-loop rotation at the given duty cycle [-1, 1]. */
+    public boolean isAtAngle(double targetRad) {
+        double toleranceRad = Math.toRadians(2.0);
+        return Math.abs(getPositionRad() - targetRad) < toleranceRad;
+    }
+
     public void rotate(double speed) {
         io.setRotationMotorOpenLoop(speed);
     }
 
-    /**
-     * Command turret to an absolute position in radians.
-     * Uses raw double to avoid Rotation2d's internal ±180° wrapping.
-     * The caller is responsible for ensuring the value is within
-     * [TurretConstants.minRotationRad, TurretConstants.maxRotationRad].
-     */
     public void rotateToAngle(double positionRad) {
         io.setRotationMotorPosition(positionRad);
     }
