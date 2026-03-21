@@ -23,6 +23,7 @@ import edu.wpi.first.wpilibj2.command.sysid.SysIdRoutine;
 import frc.robot.commands.DriveCommands;
 import frc.robot.commands.IndexerCommands;
 import frc.robot.commands.ShooterCommands;
+import frc.robot.commands.TurretCommands;
 import frc.robot.constants.Constants;
 import frc.robot.constants.IndexerConstants;
 import frc.robot.constants.IntakeConstants;
@@ -36,29 +37,23 @@ import frc.robot.subsystems.drive.ModuleIO;
 import frc.robot.subsystems.drive.ModuleIOSim;
 import frc.robot.subsystems.drive.ModuleIOTalonFX;
 import frc.robot.subsystems.indexer.Indexer;
-import frc.robot.subsystems.indexer.IndexerIO;
 import frc.robot.subsystems.indexer.IndexerIOSim;
 import frc.robot.subsystems.indexer.IndexerIOTalonFX;
 import frc.robot.subsystems.intake.Intake;
-import frc.robot.subsystems.intake.IntakeIO;
 import frc.robot.subsystems.intake.IntakeIOSim;
 import frc.robot.subsystems.intake.IntakeIOTalonFX;
 import frc.robot.subsystems.shooter.Shooter;
-import frc.robot.subsystems.shooter.ShooterIO;
 import frc.robot.subsystems.shooter.ShooterIOSim;
 import frc.robot.subsystems.shooter.ShooterIOTalonFX;
 import frc.robot.subsystems.turret.Turret;
-import frc.robot.subsystems.turret.TurretIO;
 import frc.robot.subsystems.turret.TurretIOSim;
 import frc.robot.subsystems.turret.TurretIOTalonFX;
 import frc.robot.subsystems.vision.Vision;
 import frc.robot.subsystems.vision.VisionIO;
 import frc.robot.subsystems.vision.VisionIOLimelight;
 import frc.robot.subsystems.vision.VisionIOPhotonVisionSim;
-
+import edu.wpi.first.wpilibj.smartdashboard.SmartDashboard;
 import static frc.robot.constants.VisionConstants.*;
-
-import org.littletonrobotics.junction.Logger;
 import org.littletonrobotics.junction.networktables.LoggedDashboardChooser;
 
 /**
@@ -98,7 +93,7 @@ public class RobotContainer {
         vision =
             new Vision(
                 drive::addVisionMeasurement,
-                new VisionIOLimelight(camera0Name, drive::getRotation));
+                new VisionIOLimelight(LimelightFixedCamera, drive::getRotation));
 
         intake = new Intake(new IntakeIOTalonFX(
             IntakeConstants.rollersCanId,
@@ -136,7 +131,7 @@ public class RobotContainer {
         vision =
             new Vision(
                 drive::addVisionMeasurement,
-                new VisionIOPhotonVisionSim(camera0Name, robotToCamera0, drive::getPose));
+                new VisionIOPhotonVisionSim(LimelightFixedCamera, robotToLimelightFixed, drive::getPose));
 
         intake = new Intake(new IntakeIOSim());
         indexer = new Indexer(new IndexerIOSim());
@@ -196,6 +191,10 @@ public class RobotContainer {
     autoChooser.addOption(
         "Drive SysId (Dynamic Reverse)", drive.sysIdDynamic(SysIdRoutine.Direction.kReverse));
 
+    
+    //transition Shifts 
+    SmartDashboard.putBoolean("Won Auto", false);
+
     // Configure the button bindings
     configureButtonBindings();
   }
@@ -243,85 +242,86 @@ public class RobotContainer {
                     drive)
                 .ignoringDisable(true));
 
-    shooter.setDefaultCommand(
-        ShooterCommands.joystickShooterCmd(
-            shooter, turret,
-            () -> mechanismsJoystick.x().getAsBoolean(),
-            () -> driverJoystick.leftTrigger(0.5).getAsBoolean(),
-            () -> driverJoystick.rightTrigger(0.5).getAsBoolean(),
-            () -> driverJoystick.a().getAsBoolean(),
-            () -> driverJoystick.b().getAsBoolean())
-    );
+                shooter.setDefaultCommand(
+            ShooterCommands.joystickShooterCmd(
+                shooter, turret, 
+                () -> mechanismsJoystick.x().getAsBoolean(), 
+                () -> driverJoystick.leftTrigger(0.5).getAsBoolean(), 
+                () -> driverJoystick.rightTrigger(0.5).getAsBoolean(),
+                () -> driverJoystick.a().getAsBoolean(),
+                () -> driverJoystick.b().getAsBoolean())
+        );
 
-    // Spin up flywheels (debug)
-    mechanismsJoystick.povUp()
-        .whileTrue(
-            Commands.runEnd(
-                () -> {
-                    shooter.debugFlywheel();
-                    turret.debugFlywheel();
-                },
-                () -> {
-                    shooter.stopFlywheel();
-                    turret.stopFlywheel();
-                },
-                shooter, turret));
+    //Mechanism
+        mechanismsJoystick.povUp()
+            .whileTrue(
+                Commands.runEnd(
+                    () -> {
+                        shooter.debugFlywheel();
+                        turret.debugFlywheel();
+                    }, 
+                    () -> {
+                        shooter.stopFlywheel();
+                        turret.stopFlywheel();
+                    },
+                    shooter, turret));
 
-    // Outtake ball from indexer (Fallback)
-    mechanismsJoystick.rightTrigger(0.5)
-        .whileTrue(
-            Commands.runEnd(
-                () -> {
-                    indexer.outtake();
-                },
-                () -> {
-                    indexer.stopIndexer();
-                },
-                indexer));
+        // Outtake ball from indexer (Fallback)
+        mechanismsJoystick.rightTrigger(0.5)
+            .whileTrue(
+                Commands.runEnd(
+                    () -> {
+                        indexer.outtake();
+                    },
+                    () -> {
+                        indexer.stopIndexer();
+                    },
+                    indexer));
 
-    // Intake
-    mechanismsJoystick.leftTrigger(0.5)
-        .whileTrue(
-            Commands.runEnd(
-                () -> {
-                    intake.intake();
-                }, () -> {
-                    intake.stopRollers();
-                },
-                intake));
+        // Intake
+        mechanismsJoystick.leftTrigger(0.5)
+            .whileTrue(
+                Commands.runEnd(
+                    () -> {
+                        intake.intake();
+                    }, () -> {
+                        intake.stopRollers();
+                    }, 
+                    intake));
+        
+        // Extend
+        mechanismsJoystick.a()
+            .whileTrue(
+                Commands.runEnd(
+                    () -> {
+                        intake.extend();
+                    }, 
+                    () -> {
+                        intake.stopExtensor();
+                    }, 
+                    intake));
 
-    // Extend
-    mechanismsJoystick.a()
-        .whileTrue(
-            Commands.runEnd(
-                () -> {
-                    intake.extend();
-                },
-                () -> {
-                    intake.stopExtensor();
-                },
-                intake));
+        // Retract
+        mechanismsJoystick.b()
+            .whileTrue(
+                Commands.runEnd(
+                    () -> {
+                        intake.retract();
+                    }, 
+                    () -> {
+                        intake.stopExtensor();
+                    }, 
+                    intake));
 
-    // Retract
-    mechanismsJoystick.b()
-        .whileTrue(
-            Commands.runEnd(
-                () -> {
-                    intake.retract();
-                },
-                () -> {
-                    intake.stopExtensor();
-                },
-                intake));
 
-    // Shoot
-    indexer.setDefaultCommand(
-        IndexerCommands.joystickIndexerCmd(
-            indexer,
-            () -> mechanismsJoystick.leftBumper().getAsBoolean(),
-            () -> mechanismsJoystick.rightBumper().getAsBoolean()
-        )
-    );
+        // Shoot
+        indexer.setDefaultCommand(
+            IndexerCommands.joystickIndexerCmd(
+                indexer,
+                () -> mechanismsJoystick.leftBumper().getAsBoolean(),
+                () -> mechanismsJoystick.rightBumper().getAsBoolean()
+            )
+        );
   }
 
   /**
