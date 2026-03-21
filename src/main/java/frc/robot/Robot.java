@@ -7,7 +7,6 @@
 
 package frc.robot;
 
-import edu.wpi.first.wpilibj.smartdashboard.SmartDashboard;
 import edu.wpi.first.wpilibj2.command.Command;
 import edu.wpi.first.wpilibj2.command.CommandScheduler;
 import frc.robot.constants.Constants;
@@ -29,8 +28,6 @@ import org.littletonrobotics.junction.wpilog.WPILOGWriter;
 public class Robot extends LoggedRobot {
   private Command autonomousCommand;
   private RobotContainer robotContainer;
-
-  private TransitionShift transitionShift = new TransitionShift();//para los transiition shifts
 
   public Robot() {
     // Record metadata
@@ -81,12 +78,12 @@ public class Robot extends LoggedRobot {
   @Override
   public void robotPeriodic() {
 
-    CommandScheduler.getInstance().run();
-
-        transitionShift.setWonAuto(SmartDashboard.getBoolean("Won Auto", false));
-        transitionShift.update();//transition shift modifier delete if nescesary
-        
-
+    // Runs the Scheduler. This is responsible for polling buttons, adding
+    // newly-scheduled commands, running already-scheduled commands, removing
+    // finished or interrupted commands, and running subsystem periodic() methods.
+    // This must be called from the robot's periodic block in order for anything in
+    // the Command-based framework to work.
+    CommandScheduler.getInstance().run();        
   }
 
   /** This function is called once when the robot is disabled. */
