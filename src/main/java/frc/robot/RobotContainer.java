@@ -23,9 +23,10 @@ import edu.wpi.first.wpilibj2.command.sysid.SysIdRoutine;
 import frc.robot.commands.DriveCommands;
 import frc.robot.commands.IndexerCommands;
 import frc.robot.commands.ShooterCommands;
-import frc.robot.constants.Constants;
+import frc.robot.commands.TurretCommands;
 import frc.robot.constants.IndexerConstants;
 import frc.robot.constants.IntakeConstants;
+import frc.robot.constants.RobotConstants;
 import frc.robot.constants.ShooterConstants;
 import frc.robot.constants.TunerConstants;
 import frc.robot.constants.TurretConstants;
@@ -51,8 +52,6 @@ import frc.robot.subsystems.vision.Vision;
 import frc.robot.subsystems.vision.VisionIO;
 import frc.robot.subsystems.vision.VisionIOLimelight;
 import frc.robot.subsystems.vision.VisionIOPhotonVisionSim;
-import edu.wpi.first.wpilibj.smartdashboard.SmartDashboard;
-
 import static frc.robot.constants.VisionConstants.*;
 import org.littletonrobotics.junction.networktables.LoggedDashboardChooser;
 
@@ -63,192 +62,187 @@ import org.littletonrobotics.junction.networktables.LoggedDashboardChooser;
  * subsystems, commands, and button mappings) should be declared here.
  */
 public class RobotContainer {
-  // Subsystems
-  private final Drive drive;
-  private final Intake intake;
-  private final Indexer indexer;
-  private final Turret turret;
-  private final Shooter shooter;
+    // Subsystems
+    private final Drive drive;
+    private final Intake intake;
+    private final Indexer indexer;
+    private final Turret turret;
+    private final Shooter shooter;
 
-  private final CommandXboxController driverJoystick = new CommandXboxController(0);
-  private final CommandXboxController mechanismsJoystick = new CommandXboxController(1);
+    private final CommandXboxController driverJoystick = new CommandXboxController(0);
+    private final CommandXboxController mechanismsJoystick = new CommandXboxController(1);
 
-  // Dashboard inputs
-  private final LoggedDashboardChooser<Command> autoChooser;
+    // Dashboard inputs
+    private final LoggedDashboardChooser<Command> autoChooser;
 
-  /** The container for the robot. Contains subsystems, OI devices, and commands. */
-  public RobotContainer() {
-    switch (Constants.currentMode) {
-      case REAL:
-        // Real robot, instantiate hardware IO implementations
-        drive =
-            new Drive(
-                new GyroIOPigeon2(),
-                new ModuleIOTalonFX(TunerConstants.FrontLeft),
-                new ModuleIOTalonFX(TunerConstants.FrontRight),
-                new ModuleIOTalonFX(TunerConstants.BackLeft),
-                new ModuleIOTalonFX(TunerConstants.BackRight));
-            new Vision(
-                drive::addVisionMeasurement,
-                new VisionIOLimelight(LimelightFixedCamera, drive::getRotation));
+    /** The container for the robot. Contains subsystems, OI devices, and commands. */
+    public RobotContainer() {
+        switch (RobotConstants.currentMode) {
+            case REAL:
+                // Real robot, instantiate hardware IO implementations
+                drive =
+                    new Drive(
+                        new GyroIOPigeon2(),
+                        new ModuleIOTalonFX(TunerConstants.FrontLeft),
+                        new ModuleIOTalonFX(TunerConstants.FrontRight),
+                        new ModuleIOTalonFX(TunerConstants.BackLeft),
+                        new ModuleIOTalonFX(TunerConstants.BackRight));
+                new Vision(
+                    drive::addVisionMeasurement,
+                    new VisionIOLimelight(LimelightFixedCamera, drive::getRotation));
+            
+                intake = new Intake(new IntakeIOTalonFX(
+                    IntakeConstants.rollersCanId,
+                    IntakeConstants.extensorCanId
+                ));
+                indexer = new Indexer(new IndexerIOTalonFX(
+                    IndexerConstants.rollersCanId,
+                    IndexerConstants.shooterWheelsCanId,
+                    IndexerConstants.turretWheelsCanId,
+                    IndexerConstants.feederCanId
+                ));
+                shooter = new Shooter(new ShooterIOTalonFX(
+                    ShooterConstants.flywheelCanId,
+                    ShooterConstants.hoodCanId
+                ));
+                turret = new Turret(
+                    new TurretIOTalonFX(
+                        TurretConstants.flywheelCanId,
+                        TurretConstants.hoodCanId,
+                        TurretConstants.rotationMotorCanId),
+                    new ShooterIOTalonFX(
+                        TurretConstants.flywheelCanId,
+                        TurretConstants.hoodCanId));
+                break;
+            
+            case SIM:
+                // Sim robot, instantiate physics sim IO implementations
+                drive =
+                    new Drive(
+                        new GyroIO() {},
+                        new ModuleIOSim(TunerConstants.FrontLeft),
+                        new ModuleIOSim(TunerConstants.FrontRight),
+                        new ModuleIOSim(TunerConstants.BackLeft),
+                        new ModuleIOSim(TunerConstants.BackRight));
+                new Vision(
+                    drive::addVisionMeasurement,
+                    new VisionIOPhotonVisionSim(LimelightFixedCamera, robotToLimelightFixed, drive::getPose));
+            
+                intake = new Intake(new IntakeIOSim());
+                indexer = new Indexer(new IndexerIOSim());
+                shooter = new Shooter(new ShooterIOSim());
+                turret = new Turret(new TurretIOSim(), new ShooterIOSim());
+                break;
+            
+            default:
+                // Replayed robot, disable IO implementations
+                drive =
+                    new Drive(
+                        new GyroIO() {},
+                        new ModuleIO() {},
+                        new ModuleIO() {},
+                        new ModuleIO() {},
+                        new ModuleIO() {});
+                new Vision(drive::addVisionMeasurement, new VisionIO() {}, new VisionIO() {});
+            
+                intake  = new Intake(new IntakeIOSim() {});
+                indexer = new Indexer(new IndexerIOSim() {});
+                shooter = new Shooter(new ShooterIOSim() {});
+                turret  = new Turret(new TurretIOSim() {}, new ShooterIOSim() {});
+                break;
+        }
 
-        intake = new Intake(new IntakeIOTalonFX(
-            IntakeConstants.rollersCanId,
-            IntakeConstants.extensorCanId
-        ));
-        indexer = new Indexer(new IndexerIOTalonFX(
-            IndexerConstants.rollersCanId,
-            IndexerConstants.shooterWheelsCanId,
-            IndexerConstants.turretWheelsCanId,
-            IndexerConstants.feederCanId
-        ));
-        shooter = new Shooter(new ShooterIOTalonFX(
-            ShooterConstants.flywheelCanId,
-            ShooterConstants.hoodCanId
-        ));
-        turret = new Turret(
-            new TurretIOTalonFX(
-                TurretConstants.flywheelCanId,
-                TurretConstants.hoodCanId,
-                TurretConstants.rotationMotorCanId),
-            new ShooterIOTalonFX(
-                TurretConstants.flywheelCanId,
-                TurretConstants.hoodCanId));
-        break;
+        autoChooser = new LoggedDashboardChooser<>("Auto Choices", AutoBuilder.buildAutoChooser());
 
-      case SIM:
-        // Sim robot, instantiate physics sim IO implementations
-        drive =
-            new Drive(
-                new GyroIO() {},
-                new ModuleIOSim(TunerConstants.FrontLeft),
-                new ModuleIOSim(TunerConstants.FrontRight),
-                new ModuleIOSim(TunerConstants.BackLeft),
-                new ModuleIOSim(TunerConstants.BackRight));
-            new Vision(
-                drive::addVisionMeasurement,
-                new VisionIOPhotonVisionSim(LimelightFixedCamera, robotToLimelightFixed, drive::getPose));
-
-        intake = new Intake(new IntakeIOSim());
-        indexer = new Indexer(new IndexerIOSim());
-        shooter = new Shooter(new ShooterIOSim());
-        turret = new Turret(new TurretIOSim(), new ShooterIOSim());
-        break;
-
-      default:
-        // Replayed robot, disable IO implementations
-        drive =
-            new Drive(
-                new GyroIO() {},
-                new ModuleIO() {},
-                new ModuleIO() {},
-                new ModuleIO() {},
-                new ModuleIO() {});
-            new Vision(drive::addVisionMeasurement, new VisionIO() {}, new VisionIO() {});
-
-        // FIX 3: assign all final subsystem fields in default case to avoid compile error
-        intake  = new Intake(new IntakeIOSim() {});
-        indexer = new Indexer(new IndexerIOSim() {});
-        shooter = new Shooter(new ShooterIOSim() {});
-        turret  = new Turret(new TurretIOSim() {}, new ShooterIOSim() {});
-        break; // FIX 4: added missing break
+        NamedCommands.registerCommand("StartFlywheels", Commands.runOnce(
+            () -> {
+                shooter.startFlywheel();
+                turret.startFlywheel();
+            }, shooter, turret).withTimeout(2));
+        NamedCommands.registerCommand("IndexBoth", Commands.sequence(
+            Commands.runOnce(() -> { indexer.intake(); }, indexer),
+            Commands.runOnce(() -> { indexer.indexBoth(); }, indexer),
+            Commands.waitSeconds(1),
+            Commands.runOnce(() -> { indexer.outtake(); }, indexer),
+            Commands.waitSeconds(0.25)
+        ).repeatedly().withTimeout(22));
+        
+        // Set up SysId routines
+        autoChooser.addOption(
+            "Drive Wheel Radius Characterization", DriveCommands.wheelRadiusCharacterization(drive));
+        autoChooser.addOption(
+            "Drive Simple FF Characterization", DriveCommands.feedforwardCharacterization(drive));
+        autoChooser.addOption(
+            "Drive SysId (Quasistatic Forward)",
+            drive.sysIdQuasistatic(SysIdRoutine.Direction.kForward));
+        autoChooser.addOption(
+            "Drive SysId (Quasistatic Reverse)",
+            drive.sysIdQuasistatic(SysIdRoutine.Direction.kReverse));
+        autoChooser.addOption(
+            "Drive SysId (Dynamic Forward)", drive.sysIdDynamic(SysIdRoutine.Direction.kForward));
+        autoChooser.addOption(
+            "Drive SysId (Dynamic Reverse)", drive.sysIdDynamic(SysIdRoutine.Direction.kReverse));
+        
+        // Configure the button bindings
+        configureButtonBindings();
     }
 
-    // FIX 2: initialize autoChooser BEFORE calling addOption on it
-    autoChooser = new LoggedDashboardChooser<>("Auto Choices", AutoBuilder.buildAutoChooser());
-
-    // FIX 1: NamedCommands registrations moved outside switch so they always execute
-    NamedCommands.registerCommand("StartFlywheels", Commands.runOnce(
-        () -> {
-            shooter.startFlywheel();
-            turret.startFlywheel();
-        }, shooter, turret).withTimeout(2));
-    NamedCommands.registerCommand("IndexBoth", Commands.sequence(
-        Commands.runOnce(() -> { indexer.intake(); }, indexer),
-        Commands.runOnce(() -> { indexer.indexBoth(); }, indexer),
-        Commands.waitSeconds(1),
-        Commands.runOnce(() -> { indexer.outtake(); }, indexer),
-        Commands.waitSeconds(0.25)
-    ).repeatedly().withTimeout(22));
-
-    // Set up SysId routines
-    autoChooser.addOption(
-        "Drive Wheel Radius Characterization", DriveCommands.wheelRadiusCharacterization(drive));
-    autoChooser.addOption(
-        "Drive Simple FF Characterization", DriveCommands.feedforwardCharacterization(drive));
-    autoChooser.addOption(
-        "Drive SysId (Quasistatic Forward)",
-        drive.sysIdQuasistatic(SysIdRoutine.Direction.kForward));
-    autoChooser.addOption(
-        "Drive SysId (Quasistatic Reverse)",
-        drive.sysIdQuasistatic(SysIdRoutine.Direction.kReverse));
-    autoChooser.addOption(
-        "Drive SysId (Dynamic Forward)", drive.sysIdDynamic(SysIdRoutine.Direction.kForward));
-    autoChooser.addOption(
-        "Drive SysId (Dynamic Reverse)", drive.sysIdDynamic(SysIdRoutine.Direction.kReverse));
-
-    
-    //transition Shifts 
-    SmartDashboard.putBoolean("Won Auto", false);
-
-    // Configure the button bindings
-    configureButtonBindings();
-  }
-
-  /**
-   * Use this method to define your button->command mappings. Buttons can be created by
-   * instantiating a {@link GenericHID} or one of its subclasses ({@link
-   * edu.wpi.first.wpilibj.Joystick} or {@link XboxController}), and then passing it to a {@link
-   * edu.wpi.first.wpilibj2.command.button.JoystickButton}.
-   */
-  private void configureButtonBindings() {
-    // Default command, normal field-relative drive
-    drive.setDefaultCommand(
-        DriveCommands.joystickDrive(
-            drive,
-            () -> -driverJoystick.getLeftY(),
-            () -> -driverJoystick.getLeftX(),
-            () -> -driverJoystick.getRightX()));
-
-    // Lock to 0° when A button is held
-    driverJoystick
-        .a()
-        .whileTrue(
-            DriveCommands.joystickDriveAtAngle(
+    /**
+     * Use this method to define your button->command mappings. Buttons can be created by
+        * instantiating a {@link GenericHID} or one of its subclasses ({@link
+        * edu.wpi.first.wpilibj.Joystick} or {@link XboxController}), and then passing it to a {@link
+        * edu.wpi.first.wpilibj2.command.button.JoystickButton}.
+        */
+    private void configureButtonBindings() {
+        // Default command, normal field-relative drive
+        drive.setDefaultCommand(
+            DriveCommands.joystickDrive(
                 drive,
                 () -> -driverJoystick.getLeftY(),
                 () -> -driverJoystick.getLeftX(),
-                () -> Rotation2d.kZero));
+                () -> -driverJoystick.getRightX()));
 
-    // Switch to X pattern when X button is pressed
-    driverJoystick.x().onTrue(Commands.runOnce(drive::stopWithX, drive));
+        // Lock to 0° when A button is held
+        driverJoystick
+            .a()
+            .whileTrue(
+                DriveCommands.joystickDriveAtAngle(
+                    drive,
+                    () -> -driverJoystick.getLeftY(),
+                    () -> -driverJoystick.getLeftX(),
+                    () -> Rotation2d.kZero));
 
-    // Reset gyro to 0° when B button is pressed
-    driverJoystick
-        .b()
-        .onTrue(
-            Commands.runOnce(
-                    () -> {
-                        boolean isFlipped =
-                            DriverStation.getAlliance().isPresent()
-                                && DriverStation.getAlliance().get() == Alliance.Red;
-                            drive.setPose(
-                                new Pose2d(drive.getPose().getTranslation(), isFlipped ? Rotation2d.k180deg : Rotation2d.kZero));
-                    },
-                    drive)
-                .ignoringDisable(true));
+        // Reset gyro to 0° when B button is pressed
+        driverJoystick
+            .b()
+            .onTrue(
+                Commands.runOnce(
+                        () -> {
+                            boolean isFlipped =
+                                DriverStation.getAlliance().isPresent()
+                                    && DriverStation.getAlliance().get() == Alliance.Red;
+                                drive.setPose(
+                                    new Pose2d(drive.getPose().getTranslation(), isFlipped ? Rotation2d.k180deg : Rotation2d.kZero));
+                        },
+                        drive)
+                    .ignoringDisable(true));
+                    
+        driverJoystick.x().toggleOnTrue(TurretCommands.bomberHub(turret, drive::getPose));
+        driverJoystick.start().toggleOnTrue(TurretCommands.trackHub(turret, drive::getPose));
+        driverJoystick.back().toggleOnTrue(TurretCommands.trackDriverStation(turret, drive::getPose));
 
-                shooter.setDefaultCommand(
+        turret.setDefaultCommand(TurretCommands.holdZero(turret));
+
+        shooter.setDefaultCommand(
             ShooterCommands.joystickShooterCmd(
                 shooter, turret, 
                 () -> mechanismsJoystick.x().getAsBoolean(), 
                 () -> driverJoystick.leftTrigger(0.5).getAsBoolean(), 
                 () -> driverJoystick.rightTrigger(0.5).getAsBoolean(),
                 () -> driverJoystick.a().getAsBoolean(),
-                () -> driverJoystick.b().getAsBoolean())
-        );
+                () -> driverJoystick.b().getAsBoolean()));
 
-    //Mechanism
+        //Mechanism
         mechanismsJoystick.povUp()
             .whileTrue(
                 Commands.runEnd(
@@ -261,7 +255,7 @@ public class RobotContainer {
                         turret.stopFlywheel();
                     },
                     shooter, turret));
-
+                
         // Outtake ball from indexer (Fallback)
         mechanismsJoystick.rightTrigger(0.5)
             .whileTrue(
@@ -273,7 +267,7 @@ public class RobotContainer {
                         indexer.stopIndexer();
                     },
                     indexer));
-
+                
         // Intake
         mechanismsJoystick.leftTrigger(0.5)
             .whileTrue(
@@ -284,7 +278,7 @@ public class RobotContainer {
                         intake.stopRollers();
                     }, 
                     intake));
-        
+                
         // Extend
         mechanismsJoystick.a()
             .whileTrue(
@@ -296,7 +290,7 @@ public class RobotContainer {
                         intake.stopExtensor();
                     }, 
                     intake));
-
+                
         // Retract
         mechanismsJoystick.b()
             .whileTrue(
@@ -308,8 +302,7 @@ public class RobotContainer {
                         intake.stopExtensor();
                     }, 
                     intake));
-
-
+                
         // Shoot
         indexer.setDefaultCommand(
             IndexerCommands.joystickIndexerCmd(
@@ -318,14 +311,23 @@ public class RobotContainer {
                 () -> mechanismsJoystick.rightBumper().getAsBoolean()
             )
         );
-  }
+    }
 
-  /**
-   * Use this to pass the autonomous command to the main {@link Robot} class.
-   *
-   * @return the command to run in autonomous
-   */
-  public Command getAutonomousCommand() {
-    return autoChooser.get();
-  }
-}
+    /**
+     * Use this to pass the autonomous command to the main {@link Robot} class.
+        *
+        * @return the command to run in autonomous
+        */
+    public Command getAutonomousCommand() {
+        return autoChooser.get();
+    }
+
+    /**
+     * Called on every robot enable (teleop + auto init) via Robot.java.
+    * Resets turret target cache so targets are recomputed from the
+    * robot's current pose at the start of each match / enable cycle.
+    */
+    public void onEnable() {
+        TurretCommands.resetTargets();
+    }
+}   

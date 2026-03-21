@@ -39,6 +39,7 @@ public class TurretIOSim implements TurretIO {
             TurretConstants.maxRotationRad);
 
         turretInputs.rotationMotorConnected = true;
+        turretInputs.rotationMotorPositionRad = rotationPositionRad;
         turretInputs.rotationMotorPosition = Rotation2d.fromRadians(rotationPositionRad);
         turretInputs.rotationMotorVelocityRadPerSec = rotationMotorSim.getAngularVelocityRadPerSec();
         turretInputs.rotationMotorAppliedVolts = appliedVolts;
@@ -46,9 +47,9 @@ public class TurretIOSim implements TurretIO {
     }
 
     @Override
-    public void setRotationMotorPosition(Rotation2d rotation) {
+    public void setRotationMotorPosition(double positionRad) {
         closedLoop = true;
-        rotationMotorController.setSetpoint(rotation.getRadians());
+        rotationMotorController.setSetpoint(positionRad);
     }
 
     @Override

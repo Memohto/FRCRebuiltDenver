@@ -10,7 +10,7 @@ import com.ctre.phoenix6.BaseStatusSignal;
 import com.ctre.phoenix6.StatusCode;
 import com.ctre.phoenix6.StatusSignal;
 import com.ctre.phoenix6.configs.TalonFXConfiguration;
-import com.ctre.phoenix6.controls.PositionVoltage;
+import com.ctre.phoenix6.controls.MotionMagicVoltage;
 import com.ctre.phoenix6.hardware.ParentDevice;
 import com.ctre.phoenix6.hardware.TalonFX;
 import com.ctre.phoenix6.signals.NeutralModeValue;
@@ -29,7 +29,7 @@ public class TurretIOTalonFX extends ShooterIOTalonFX implements TurretIO {
     private final StatusSignal<Voltage> rotationAppliedVolts;
     private final StatusSignal<Current> rotationCurrentAmps;
 
-    private final PositionVoltage positionVoltageRequest = new PositionVoltage(0.0);
+    private final MotionMagicVoltage motionMagicRequest = new MotionMagicVoltage(0.0);
 
     public TurretIOTalonFX(int flywheelCanId, int hoodCanId, int rotationMotorCanId) {
         super(flywheelCanId, hoodCanId);
@@ -46,6 +46,8 @@ public class TurretIOTalonFX extends ShooterIOTalonFX implements TurretIO {
             Units.radiansToRotations(TurretConstants.maxRotationRad);
         rotationConfig.SoftwareLimitSwitch.ReverseSoftLimitThreshold =
             Units.radiansToRotations(TurretConstants.minRotationRad);
+        rotationConfig.MotionMagic.MotionMagicCruiseVelocity = TurretConstants.maxVelocityRotPerSec;
+        rotationConfig.MotionMagic.MotionMagicAcceleration = TurretConstants.maxAccelerationRotPerSecSec;
         tryUntilOk(5, () -> rotationMotor.getConfigurator().apply(rotationConfig, 0.25));
         tryUntilOk(5, () -> rotationMotor.setPosition(0.0, 0.25));
 
@@ -66,17 +68,23 @@ public class TurretIOTalonFX extends ShooterIOTalonFX implements TurretIO {
     @Override
     public void updateInputs(ShooterIOInputs shooterInputs, TurretIOInputs turretInputs) {
         super.updateInputs(shooterInputs);
+        
+        double positionRotations = rotationPosition.getValueAsDouble();
+        
         turretInputs.rotationMotorConnected = BaseStatusSignal.refreshAll(
             rotationPosition, rotationVelocity, rotationAppliedVolts, rotationCurrentAmps).equals(StatusCode.OK);
-        turretInputs.rotationMotorPosition = Rotation2d.fromRotations(rotationPosition.getValueAsDouble());
+        turretInputs.rotationMotorPositionRad = Units.rotationsToRadians(positionRotations);
+        turretInputs.rotationMotorPosition = Rotation2d.fromRotations(positionRotations);
         turretInputs.rotationMotorVelocityRadPerSec = Units.rotationsToRadians(rotationVelocity.getValueAsDouble());
         turretInputs.rotationMotorAppliedVolts = rotationAppliedVolts.getValueAsDouble();
         turretInputs.rotationMotorCurrentAmps = rotationCurrentAmps.getValueAsDouble();
     }
 
     @Override
-    public void setRotationMotorPosition(Rotation2d rotation) {
-        rotationMotor.setControl(positionVoltageRequest.withPosition(rotation.getRotations()));
+    public void setRotationMotorPosition(double positionRad) {
+        // Convert radians → mechanism rotations directly (NO Rotation2d — avoids ±180° wrap)
+        double positionRotations = positionRad / (2.0 * Math.PI);
+        rotationMotor.setControl(motionMagicRequest.withPosition(positionRotations));
     }
 
     @Override

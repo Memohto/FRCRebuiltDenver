@@ -25,8 +25,14 @@ public class Shooter extends SubsystemBase {
         return Math.abs(inputs.flywheelVelocityRadPerSec) > ShooterConstants.shootingSpeedRadPerSec;
     }
 
+    /** Spin flywheel at the default fixed speed from ShooterConstants. */
     public void startFlywheel() {
         io.setFlywheelOpenLoop(ShooterConstants.flywheelSpeed);
+    }
+
+    /** Spin flywheel at a specific duty cycle (0.0–1.0). Used by Turret for distance-based speed. */
+    public void setFlywheelSpeed(double dutyCycle) {
+        io.setFlywheelOpenLoop(dutyCycle);
     }
 
     public void debugFlywheel() {
@@ -41,6 +47,11 @@ public class Shooter extends SubsystemBase {
         io.setHoodOpenLoop(speed);
     }
 
+    /**
+     * Set hood position based on distance using the fixed shooter's shot map.
+     * The shot map returns degrees of offset from starting position (0 = 17.5° physical).
+     * The value is negated because CW (negative) = hood UP due to motor inversion.
+     */
     public void setHoodPosition(double distanceToTargetMeters) {
         double hoodAngleDegrees = ShooterConstants.kShotMap.get(distanceToTargetMeters);
         io.setHoodPosition(Rotation2d.fromDegrees(-hoodAngleDegrees));
@@ -54,10 +65,12 @@ public class Shooter extends SubsystemBase {
         return Math.abs(inputs.hoodPosition.getRadians() - target.getRadians()) < tolerance.getRadians();
     }
 
+    /** Move hood to starting position (17.5° physical = mechanism position 0). */
     public void setHoodInitialPosition() {
-        io.setHoodPosition(Rotation2d.fromRotations(-ShooterConstants.minHoodAngleRad));
+        io.setHoodPosition(new Rotation2d());
     }
 
+    /** Return hood to starting position (17.5° physical = mechanism position 0). */
     public void setHoodResetPosition() {
         io.setHoodPosition(new Rotation2d());
     }

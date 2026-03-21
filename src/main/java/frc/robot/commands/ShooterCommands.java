@@ -7,13 +7,12 @@ import edu.wpi.first.math.geometry.Rotation2d;
 import edu.wpi.first.wpilibj2.command.Command;
 import edu.wpi.first.wpilibj2.command.Commands;
 import frc.robot.constants.ShooterConstants;
+import frc.robot.constants.TurretConstants;
 import frc.robot.subsystems.shooter.Shooter;
 import frc.robot.subsystems.turret.Turret;
 
 public class ShooterCommands {
     private ShooterCommands() {}
-
-    private static boolean flywheelRunning = false;
 
     public static Command joystickShooterCmd(
         Shooter shooter,
@@ -26,14 +25,31 @@ public class ShooterCommands {
         return Commands.run(
             () -> {
                 if (shootSupplier.getAsBoolean()) {
-                    shooter.startFlywheel();
-                    turret.startFlywheel();
+                    if (TurretCommands.isBomberMode()) {
+                        double distance = TurretCommands.getDistanceToTarget();
+                        double dutyCycle = TurretConstants.kTurretFlywheelMap.get(distance);
+                        shooter.setFlywheelSpeed(dutyCycle);
+                        turret.startFlywheelForDistance(distance);
+                    } else if (TurretCommands.isTracking()) {
+                        shooter.startFlywheel();
+                        turret.startFlywheelForDistance(TurretCommands.getDistanceToTarget());
+                    } else {
+                        shooter.startFlywheel();
+                        turret.startFlywheel();
+                    }
                 } else {
                     shooter.stopFlywheel();
                     turret.stopFlywheel();
                 }
 
-                if (hoodUpSupplier.getAsBoolean()) {
+                // ── Hoods ──────────────────────────────────────────────────
+                if (TurretCommands.isBomberMode()) {
+                    // BOMBER: fixed shooter hood auto-adjusts based on distance
+                    // (turret hood is managed by TurretCommands.bomberHub)
+                    double distance = TurretCommands.getDistanceToTarget();
+                    double hoodOffsetDeg = TurretConstants.kTurretHoodMap.get(distance);
+                    shooter.setHoodRotation(Rotation2d.fromDegrees(-hoodOffsetDeg));
+                } else if (hoodUpSupplier.getAsBoolean()) {
                     shooter.setHoodOpenLoop(ShooterConstants.hoodSpeed);
                     turret.setHoodOpenLoop(ShooterConstants.hoodSpeed);
                 } else if (hoodDownSupplier.getAsBoolean()) {
@@ -43,78 +59,8 @@ public class ShooterCommands {
                     shooter.setHoodOpenLoop(0);
                     turret.setHoodOpenLoop(0);
                 }
-
-                if (rotateUpSupplier.getAsBoolean()) {
-                    turret.rotate(ShooterConstants.hoodSpeed);
-                } else if (rotateDownSupplier.getAsBoolean()) {
-                    turret.rotate(-ShooterConstants.hoodSpeed);
-                } else {
-                    turret.rotate(0);
-                }
             },
-            shooter, turret
+            shooter
         );
     }
-
-    //manual commands
-    public static Command flywheelCommand(
-        Shooter shooter,
-        BooleanSupplier toggleSupplier) {
-
-        return Commands.run(
-            () -> {
-                if (toggleSupplier.getAsBoolean()) {
-                    flywheelRunning = !flywheelRunning;
-                }
-
-                if (flywheelRunning) {
-                    shooter.startFlywheel();
-                } else {
-                    shooter.stopFlywheel();
-                }
-            },
-        shooter);
-    }
-
-    public static Command manualHood(
-        Shooter shooter,
-        DoubleSupplier voltageSupplier) {
-
-        return Commands.run(
-            () -> shooter.setHoodOpenLoop(voltageSupplier.getAsDouble()),
-        shooter);
-    }
-
-    //automated commands
-    public static Command hoodInitialPosition(
-        Shooter shooter) {
-
-        return Commands.run(
-            () -> {
-                Rotation2d target    = Rotation2d.fromRotations(-ShooterConstants.minHoodAngleRad);
-                Rotation2d tolerance = Rotation2d.fromRotations(ShooterConstants.hoodToleranceRotations);
-
-                if (!shooter.isHoodAtPosition(target, tolerance)) {
-                    shooter.setHoodInitialPosition();
-                } else {
-                    shooter.setHoodOpenLoop(0);
-                }
-            },
-        shooter);
-    }
-
-    public static Command hoodResetPosition(
-        Shooter shooter) {
-
-        return Commands.run(
-            () -> {
-                if (!shooter.isHoodAtResetPosition()) {
-                    shooter.setHoodResetPosition();
-                } else {
-                    shooter.setHoodOpenLoop(0);
-                }
-            },
-        shooter);
-    
-}
 }

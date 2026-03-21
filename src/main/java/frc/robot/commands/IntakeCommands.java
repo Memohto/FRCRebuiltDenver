@@ -35,17 +35,4 @@ public class IntakeCommands {
             },
         intake);
     }
-
-    // Command auto
-    public static Command intakeAuto(Intake intake) {
-    return Commands.run(
-        () -> {
-            intake.setExtensorPosition(Rotation2d.fromRadians(20));
-            intake.intake();
-        },
-        intake
-    );
-
-    
-}
 }

@@ -41,9 +41,9 @@ import edu.wpi.first.wpilibj.smartdashboard.SmartDashboard;
 import edu.wpi.first.wpilibj2.command.Command;
 import edu.wpi.first.wpilibj2.command.SubsystemBase;
 import edu.wpi.first.wpilibj2.command.sysid.SysIdRoutine;
-import frc.robot.constants.Constants;
+import frc.robot.constants.RobotConstants;
 import frc.robot.constants.TunerConstants;
-import frc.robot.constants.Constants.Mode;
+import frc.robot.constants.RobotConstants.Mode;
 import frc.robot.subsystems.drive.GyroIO.GyroIOInputsAutoLogged;
 import frc.robot.util.LocalADStarAK;
 import java.util.concurrent.locks.Lock;
@@ -217,7 +217,7 @@ public class Drive extends SubsystemBase {
     }
 
     // Update gyro alert
-    gyroDisconnectedAlert.set(!gyroInputs.connected && Constants.currentMode != Mode.SIM);
+    gyroDisconnectedAlert.set(!gyroInputs.connected && RobotConstants.currentMode != Mode.SIM);
   }
 
   /**
