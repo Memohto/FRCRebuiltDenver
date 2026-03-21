@@ -7,6 +7,7 @@
 
 package frc.robot;
 
+import edu.wpi.first.wpilibj.smartdashboard.SmartDashboard;
 import edu.wpi.first.wpilibj2.command.Command;
 import edu.wpi.first.wpilibj2.command.CommandScheduler;
 import frc.robot.constants.Constants;
@@ -27,6 +28,7 @@ import org.littletonrobotics.junction.wpilog.WPILOGWriter;
 public class Robot extends LoggedRobot {
   private Command autonomousCommand;
   private RobotContainer robotContainer;
+  private final TransitionShift transitionShift = new TransitionShift();
 
   public Robot() {
     // Record metadata
@@ -85,6 +87,9 @@ public class Robot extends LoggedRobot {
     // finished or interrupted commands, and running subsystem periodic() methods.
     // This must be called from the robot's periodic block in order for anything in
     // the Command-based framework to work.
+
+    transitionShift.setWonAuto(SmartDashboard.getBoolean("Won Auto", false));
+    transitionShift.update();
     CommandScheduler.getInstance().run();
 
     // Return to non-RT thread priority (do not modify the first argument)
