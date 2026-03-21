@@ -43,6 +43,7 @@ import edu.wpi.first.wpilibj2.command.SubsystemBase;
 import edu.wpi.first.wpilibj2.command.sysid.SysIdRoutine;
 import frc.robot.constants.RobotConstants;
 import frc.robot.constants.TunerConstants;
+import frc.robot.constants.RobotConstants.DriveMode;
 import frc.robot.constants.RobotConstants.Mode;
 import frc.robot.subsystems.drive.GyroIO.GyroIOInputsAutoLogged;
 import frc.robot.util.LocalADStarAK;
@@ -52,9 +53,10 @@ import org.littletonrobotics.junction.AutoLogOutput;
 import org.littletonrobotics.junction.Logger;
 
 public class Drive extends SubsystemBase {
+  public static DriveMode mode = DriveMode.NORMAL;
+
   // TunerConstants doesn't include these constants, so they are declared locally
   static final double ODOMETRY_FREQUENCY = TunerConstants.kCANBus.isNetworkFD() ? 250.0 : 100.0;
-
 
   public static final double DRIVE_BASE_RADIUS =
       Math.max(
@@ -357,6 +359,12 @@ public class Drive extends SubsystemBase {
   /** Returns the maximum angular speed in radians per sec. */
   public double getMaxAngularSpeedRadPerSec() {
     return getMaxLinearSpeedMetersPerSec() / DRIVE_BASE_RADIUS;
+  }
+
+  public double getDistanceToTargetMeters(Translation2d target) {
+    double dx = target.getX() - getPose().getX();
+    double dy = target.getY() - getPose().getY();
+    return Math.sqrt(dx * dx + dy * dy);
   }
 
   /** Returns an array of module translations. */

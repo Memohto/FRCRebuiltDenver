@@ -4,6 +4,7 @@ import org.littletonrobotics.junction.Logger;
 
 import edu.wpi.first.math.geometry.Rotation2d;
 import edu.wpi.first.math.geometry.Rotation3d;
+import frc.robot.constants.RobotConstants.TurretMode;
 import frc.robot.constants.TurretConstants;
 import frc.robot.subsystems.shooter.Shooter;
 import frc.robot.subsystems.shooter.ShooterIO;
@@ -11,6 +12,8 @@ import frc.robot.subsystems.shooter.ShooterIO.ShooterIOInputsAutoLogged;
 import frc.robot.subsystems.turret.TurretIO.TurretIOInputsAutoLogged;
 
 public class Turret extends Shooter {
+    public static TurretMode mode = TurretMode.NORMAL;
+
     private final TurretIO io;
     private final ShooterIOInputsAutoLogged shooterInputs = new ShooterIOInputsAutoLogged();
     private final TurretIOInputsAutoLogged turretInputs = new TurretIOInputsAutoLogged();
@@ -54,7 +57,7 @@ public class Turret extends Shooter {
      */
     public void setHoodForDistance(double distanceMeters) {
         double hoodOffsetDeg = TurretConstants.kTurretHoodMap.get(distanceMeters);
-        setHoodRotation(Rotation2d.fromDegrees(-hoodOffsetDeg));
+        setHoodRotation(Rotation2d.fromDegrees(hoodOffsetDeg));
         Logger.recordOutput("Turret/Hood/DistanceM", distanceMeters);
         Logger.recordOutput("Turret/Hood/OffsetDeg", hoodOffsetDeg);
     }

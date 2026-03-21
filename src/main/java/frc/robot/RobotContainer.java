@@ -30,6 +30,9 @@ import frc.robot.constants.RobotConstants;
 import frc.robot.constants.ShooterConstants;
 import frc.robot.constants.TunerConstants;
 import frc.robot.constants.TurretConstants;
+import frc.robot.constants.RobotConstants.DriveMode;
+import frc.robot.constants.RobotConstants.RobotMode;
+import frc.robot.constants.RobotConstants.TurretMode;
 import frc.robot.subsystems.drive.Drive;
 import frc.robot.subsystems.drive.GyroIO;
 import frc.robot.subsystems.drive.GyroIOPigeon2;
@@ -53,6 +56,8 @@ import frc.robot.subsystems.vision.VisionIO;
 import frc.robot.subsystems.vision.VisionIOLimelight;
 import frc.robot.subsystems.vision.VisionIOPhotonVisionSim;
 import static frc.robot.constants.VisionConstants.*;
+
+import org.littletonrobotics.junction.Logger;
 import org.littletonrobotics.junction.networktables.LoggedDashboardChooser;
 
 /**
@@ -227,20 +232,57 @@ public class RobotContainer {
                         drive)
                     .ignoringDisable(true));
                     
-        driverJoystick.x().toggleOnTrue(TurretCommands.bomberHub(turret, drive::getPose));
-        driverJoystick.start().toggleOnTrue(TurretCommands.trackHub(turret, drive::getPose));
-        driverJoystick.back().toggleOnTrue(TurretCommands.trackDriverStation(turret, drive::getPose));
+        driverJoystick.x().onTrue(Commands.runOnce(() -> {
+            Robot.mode = RobotMode.BOMBER;
+            Drive.mode = DriveMode.ORBIT;
+            Turret.mode = TurretMode.NORMAL;
+            Logger.recordOutput("RobotMode", "BOMBER");
+            Logger.recordOutput("DriveMode", "ORBIT");
+            Logger.recordOutput("TurretMode", "NORMAL");
+        }));
+        driverJoystick.y().onTrue(Commands.runOnce(() -> {
+            Robot.mode = RobotMode.BOMBER;
+            Drive.mode = DriveMode.FEEDER;
+            Turret.mode = TurretMode.NORMAL;
+            Logger.recordOutput("RobotMode", "BOMBER");
+            Logger.recordOutput("DriveMode", "FEEDER");
+            Logger.recordOutput("TurretMode", "NORMAL");
+        }));
+        driverJoystick.start().onTrue(Commands.runOnce(() -> {
+            Robot.mode = RobotMode.STRIKER;
+            Drive.mode = DriveMode.NORMAL;
+            Turret.mode = TurretMode.HUB_TRACKER;
+            Logger.recordOutput("RobotMode", "STRIKER");
+            Logger.recordOutput("DriveMode", "NORMAL");
+            Logger.recordOutput("TurretMode", "HUB_TRACKER");
+        }));
+        driverJoystick.back().onTrue(Commands.runOnce(() -> {
+            Robot.mode = RobotMode.STRIKER;
+            Drive.mode = DriveMode.NORMAL;
+            Turret.mode = TurretMode.DS_TRACKER;
+            Logger.recordOutput("RobotMode", "STRIKER");
+            Logger.recordOutput("DriveMode", "NORMAL");
+            Logger.recordOutput("TurretMode", "DS_TRACKER");
+        }));
+
+        // driverJoystick.x().toggleOnTrue(TurretCommands.bomberHub(turret, drive::getPose));
+        // driverJoystick.start().toggleOnTrue(TurretCommands.trackHub(turret, drive::getPose));
+        // driverJoystick.back().toggleOnTrue(TurretCommands.trackDriverStation(turret, drive::getPose));
 
         turret.setDefaultCommand(TurretCommands.holdZero(turret));
 
         shooter.setDefaultCommand(
             ShooterCommands.joystickShooterCmd(
                 shooter, turret, 
-                () -> mechanismsJoystick.x().getAsBoolean(), 
-                () -> driverJoystick.leftTrigger(0.5).getAsBoolean(), 
-                () -> driverJoystick.rightTrigger(0.5).getAsBoolean(),
-                () -> driverJoystick.a().getAsBoolean(),
-                () -> driverJoystick.b().getAsBoolean()));
+                () -> mechanismsJoystick.x().getAsBoolean(),
+                () -> {
+                    // Flip everything if red alliance
+                    boolean isFlipped = DriverStation.getAlliance().isPresent()
+                        && DriverStation.getAlliance().get() == Alliance.Red;
+                    return drive.getDistanceToTargetMeters(
+                        isFlipped ? RobotConstants.redHub : RobotConstants.blueHub
+                    );
+                }));
 
         //Mechanism
         mechanismsJoystick.povUp()
