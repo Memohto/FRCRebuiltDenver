@@ -30,7 +30,7 @@ public class Robot extends LoggedRobot {
   private Command autonomousCommand;
   private RobotContainer robotContainer;
 
-  private TransitionShift transitionShift = new TransitionShift();//para los transiition shifts
+
 
   public Robot() {
     // Record metadata
@@ -82,10 +82,6 @@ public class Robot extends LoggedRobot {
   public void robotPeriodic() {
 
     CommandScheduler.getInstance().run();
-
-        transitionShift.setWonAuto(SmartDashboard.getBoolean("Won Auto", false));
-        transitionShift.update();//transition shift modifier delete if nescesary
-        
 
   }
 
