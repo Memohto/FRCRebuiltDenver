@@ -361,9 +361,10 @@ public class Drive extends SubsystemBase {
     return getMaxLinearSpeedMetersPerSec() / DRIVE_BASE_RADIUS;
   }
 
-  public double getDistanceToTargetMeters(Translation2d target) {
-    double dx = target.getX() - getPose().getX();
-    double dy = target.getY() - getPose().getY();
+  /** Returns thhe distance in meters from a robot pose to a target */
+  public static double getDistanceToTargetMeters(Pose2d robotPose, Translation2d target) {
+    double dx = target.getX() - robotPose.getX();
+    double dy = target.getY() - robotPose.getY();
     return Math.sqrt(dx * dx + dy * dy);
   }
 

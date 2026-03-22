@@ -1,73 +1,73 @@
 package frc.robot.commands;
 
-import static frc.robot.constants.VisionConstants.robotToCamera1;
-
-import java.util.function.BooleanSupplier;
-import java.util.function.DoubleSupplier;
-
-import org.littletonrobotics.junction.Logger;
-
-import edu.wpi.first.math.geometry.Rotation2d;
-import edu.wpi.first.wpilibj2.command.Command;
-import edu.wpi.first.wpilibj2.command.Commands;
-import frc.robot.constants.ShooterConstants;
-import frc.robot.constants.TurretConstants;
 import frc.robot.Robot;
+import frc.robot.constants.RobotConstants;
+import frc.robot.constants.ShooterConstants;
+import frc.robot.constants.RobotConstants.DriveMode;
 import frc.robot.constants.RobotConstants.RobotMode;
+import frc.robot.subsystems.drive.Drive;
 import frc.robot.subsystems.shooter.Shooter;
 import frc.robot.subsystems.turret.Turret;
 
+import java.util.function.BooleanSupplier;
+import java.util.function.Supplier;
+
+import edu.wpi.first.math.geometry.Pose2d;
+import edu.wpi.first.math.geometry.Translation2d;
+import edu.wpi.first.wpilibj.DriverStation;
+import edu.wpi.first.wpilibj.DriverStation.Alliance;
+import edu.wpi.first.wpilibj2.command.Command;
+import edu.wpi.first.wpilibj2.command.Commands;
+
 public class ShooterCommands {
-    private ShooterCommands() {}
+  private ShooterCommands() {
+  }
 
-    public static Command joystickShooterCmd(
-        Shooter shooter,
-        Turret turret,
-        BooleanSupplier shootSupplier,
-        DoubleSupplier distanceToHubSupplier) {
-        return Commands.run(
-            () -> {
-                if (shootSupplier.getAsBoolean()) {
-                    double distanceMeters = distanceToHubSupplier.getAsDouble();
-                    double hoodOffsetDeg = TurretConstants.kTurretHoodMap.get(distanceMeters);
-                    // [TODO] Move set Hood and flywheel fow distance to shooter
-                    shooter.setHoodRotation(Rotation2d.fromDegrees(-hoodOffsetDeg));
+  private static Translation2d getBomberTarget() {
+    boolean isRedAlliance = DriverStation.getAlliance().isPresent()
+        && DriverStation.getAlliance().get() == Alliance.Red;
 
-                    if (Robot.mode == RobotMode.BOMBER) {
-                        double dutyCycle = TurretConstants.kTurretFlywheelMap.get(distanceMeters);
-                        shooter.setFlywheelSpeed(dutyCycle);
-                        turret.startFlywheelForDistance(distanceMeters);
-                    } else if (Robot.mode == RobotMode.STRIKER) {
-                        shooter.stopFlywheel();
-                        turret.startFlywheelForDistance(distanceMeters);
-                    } else {
-                        shooter.startFlywheel();
-                        turret.startFlywheel();
-                    }
-                } else {
-                    shooter.stopFlywheel();
-                    turret.stopFlywheel();
-                }
-
-                // // ── Hoods ──────────────────────────────────────────────────
-                // if (TurretCommands.isBomberMode()) {
-                //     // BOMBER: fixed shooter hood auto-adjusts based on distance
-                //     // (turret hood is managed by TurretCommands.bomberHub)
-                //     double distance = TurretCommands.getDistanceToTarget();
-                //     double hoodOffsetDeg = TurretConstants.kTurretHoodMap.get(distance);
-                //     shooter.setHoodRotation(Rotation2d.fromDegrees(-hoodOffsetDeg));
-                // } else if (hoodUpSupplier.getAsBoolean()) {
-                //     shooter.setHoodOpenLoop(ShooterConstants.hoodSpeed);
-                //     turret.setHoodOpenLoop(ShooterConstants.hoodSpeed);
-                // } else if (hoodDownSupplier.getAsBoolean()) {
-                //     shooter.setHoodOpenLoop(-ShooterConstants.hoodSpeed);
-                //     turret.setHoodOpenLoop(-ShooterConstants.hoodSpeed);
-                // } else {
-                //     shooter.setHoodOpenLoop(0);
-                //     turret.setHoodOpenLoop(0);
-                // }
-            },
-            shooter
-        );
+    Translation2d target = new Translation2d();
+    switch (Drive.mode) {
+      case ORBIT:
+        target = isRedAlliance ? RobotConstants.redHub : RobotConstants.blueHub;
+        break;
+      case FEEDER:
+        // [TODO] Change to DS targets
+        target = isRedAlliance ? RobotConstants.redHub : RobotConstants.blueHub;
+        break;
+      case NORMAL:
+      default:
+        break;
     }
+    return target;
+  }
+
+  public static Command joystickShooterCmd(
+      Shooter shooter,
+      Turret turret,
+      BooleanSupplier shootSupplier,
+      Supplier<Pose2d> robotPoseSupplier) {
+    return Commands.run(
+        () -> {
+          if (shootSupplier.getAsBoolean() && Robot.mode == RobotMode.BOMBER) {
+            Pose2d robotPose = robotPoseSupplier.get();
+            Translation2d target = getBomberTarget();
+            double distanceMeters = Drive.getDistanceToTargetMeters(robotPose, target);
+
+            if (Drive.mode != DriveMode.NORMAL) {
+              shooter.setHoodForDistance(distanceMeters);
+              double flyWheelSpeed = ShooterConstants.kShooterFlywheelMap.get(distanceMeters);
+              shooter.setFlywheelSpeed(flyWheelSpeed);
+            } else {
+              shooter.setHoodAtInitialPosition();
+              shooter.setFlywheelSpeed(ShooterConstants.flywheelDefaultSpeed);
+            }
+          } else {
+            shooter.stopFlywheel();
+            shooter.setHoodAtInitialPosition();
+          }
+        },
+        shooter);
+  }
 }

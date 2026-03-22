@@ -7,6 +7,7 @@ import edu.wpi.first.math.util.Units;
 public class IntakeConstants {
     public static final double pinionRadiusMeters = Units.inchesToMeters(0.5);
 
+    // ── Rollers ────────────────────────────────────────────────────────────────
     public static final int rollersCanId = 21;
     public static final Slot0Configs rollersGains =
         new Slot0Configs().withKP(0.1).withKI(0).withKD(0);
@@ -16,6 +17,7 @@ public class IntakeConstants {
     public static final double rollersSupplyCurrentLimitAmps = 30;
     public static final boolean rollersInverted = false;
 
+    // ── Extensor ───────────────────────────────────────────────────────────────
     public static final int extensorCanId = 20;
     public static final Slot0Configs extensorGains =
         new Slot0Configs().withKP(0.1).withKI(0).withKD(0).withKS(0).withKV(0.124);
