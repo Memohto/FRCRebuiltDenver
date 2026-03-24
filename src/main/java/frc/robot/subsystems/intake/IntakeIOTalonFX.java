@@ -73,7 +73,7 @@ public class IntakeIOTalonFX implements IntakeIO {
         extensorConfig.Feedback.SensorToMechanismRatio = IntakeConstants.extensorGearRatio;
         extensorConfig.SoftwareLimitSwitch.ForwardSoftLimitEnable = true;
         extensorConfig.SoftwareLimitSwitch.ReverseSoftLimitEnable = true;
-        extensorConfig.SoftwareLimitSwitch.ForwardSoftLimitThreshold = Rotation2d.fromRadians(20.5).getRotations(); // 21
+        extensorConfig.SoftwareLimitSwitch.ForwardSoftLimitThreshold = Rotation2d.fromRadians(10).getRotations(); // 20.5
         extensorConfig.SoftwareLimitSwitch.ReverseSoftLimitThreshold = Rotation2d.fromRadians(3).getRotations(); // 3 
         rollersConfig.CurrentLimits.StatorCurrentLimitEnable = true;
         rollersConfig.CurrentLimits.SupplyCurrentLimitEnable = true;
