@@ -19,7 +19,7 @@ public class IntakeCommands {
                 boolean out = outtakeupplier.getAsBoolean() && !intakeupplier.getAsBoolean();
                 boolean extend = in || out;
 
-                if (extend && !intake.extensorIsAtPosition(Rotation2d.fromRadians(20), Rotation2d.fromRadians(0.2))) {
+                if (extend && !intake.extensorIsAtPosition(Rotation2d.fromRadians(10), Rotation2d.fromRadians(0.2))) {
                     intake.setExtensorPosition(Rotation2d.fromRadians(20));
                     if(in) {
                         intake.intake();

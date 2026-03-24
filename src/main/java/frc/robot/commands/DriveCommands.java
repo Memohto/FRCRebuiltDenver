@@ -34,7 +34,7 @@ import java.util.function.Supplier;
 public class DriveCommands {
     private static final double DEADBAND = 0.1;
     private static final double ANGLE_KP = 0.5;
-    private static final double ANGLE_KD = 0.0;
+    private static final double ANGLE_KD = 0.01;
     private static final double ANGLE_MAX_VELOCITY = 4;
     private static final double ANGLE_MAX_ACCELERATION = 20.0;
     private static final double FF_START_DELAY = 2.0; // Secs
@@ -102,7 +102,8 @@ public class DriveCommands {
                 case FEEDER:
                     // Calculate angular speed
                     omega = angleController.calculate(
-                            drive.getRotation().getRadians(), Rotation2d.kZero.getRadians());
+                            drive.getRotation().getRadians(), 
+                                isFlipped ? Rotation2d.k180deg.getRadians() : Rotation2d.kZero.getRadians());
                     break;
                 case NORMAL:
                 default:

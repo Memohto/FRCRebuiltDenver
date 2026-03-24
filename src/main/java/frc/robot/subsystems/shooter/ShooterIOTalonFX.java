@@ -70,12 +70,12 @@ public class ShooterIOTalonFX implements ShooterIO {
         hoodConfig.CurrentLimits.SupplyCurrentLimitEnable = true;
         hoodConfig.CurrentLimits.StatorCurrentLimit = ShooterConstants.hoodStatorCurrentLimitAmps;
         hoodConfig.CurrentLimits.SupplyCurrentLimit = ShooterConstants.hoodSupplyCurrentLimitAmps;
-        hoodConfig.SoftwareLimitSwitch.ForwardSoftLimitEnable = true;
-        hoodConfig.SoftwareLimitSwitch.ReverseSoftLimitEnable = true;
-        hoodConfig.SoftwareLimitSwitch.ForwardSoftLimitThreshold = 
-            Units.radiansToRotations(ShooterConstants.maxHoodAngleRad);
-        hoodConfig.SoftwareLimitSwitch.ReverseSoftLimitThreshold = 
-            Units.radiansToRotations(ShooterConstants.minHoodAngleRad);
+        // hoodConfig.SoftwareLimitSwitch.ForwardSoftLimitEnable = true;
+        // hoodConfig.SoftwareLimitSwitch.ReverseSoftLimitEnable = true;
+        // hoodConfig.SoftwareLimitSwitch.ForwardSoftLimitThreshold = 
+        //     Units.radiansToRotations(ShooterConstants.maxHoodAngleRad);
+        // hoodConfig.SoftwareLimitSwitch.ReverseSoftLimitThreshold = 
+        //     Units.radiansToRotations(ShooterConstants.minHoodAngleRad);
         hoodConfig.MotorOutput.Inverted = ShooterConstants.hoodInverted
             ? InvertedValue.CounterClockwise_Positive
             : InvertedValue.Clockwise_Positive;

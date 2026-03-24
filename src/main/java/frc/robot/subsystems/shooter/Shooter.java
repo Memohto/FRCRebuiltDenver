@@ -27,6 +27,7 @@ public class Shooter extends SubsystemBase {
 
     public void startFlywheelForDistance(double distanceMeters) {
         double speed = ShooterConstants.kShooterFlywheelMap.get(distanceMeters);
+        Logger.recordOutput("Debug/Shooter/Speed", speed);
         setFlywheelSpeed(speed);
     }
 

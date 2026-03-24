@@ -46,7 +46,7 @@ public class TurretCommands {
     return targetAngle;
   }
 
-  private static Translation2d getBomberTarget() {
+  private static Translation2d getBomberTarget(Pose2d robotPose) {
     boolean isRedAlliance = DriverStation.getAlliance().isPresent()
         && DriverStation.getAlliance().get() == Alliance.Red;
 
@@ -56,8 +56,7 @@ public class TurretCommands {
         target = isRedAlliance ? RobotConstants.redHub : RobotConstants.blueHub;
         break;
       case FEEDER:
-        // [TODO] Change to DS targets
-        target = isRedAlliance ? RobotConstants.redHub : RobotConstants.blueHub;
+        target = isRedAlliance ? new Translation2d(14, robotPose.getY()) : new Translation2d(2, robotPose.getY());
         break;
       case NORMAL:
       default:
@@ -66,7 +65,7 @@ public class TurretCommands {
     return target;
   }
 
-  private static Translation2d getStrikerTarget() {
+  private static Translation2d getStrikerTarget(Pose2d robotPose) {
     boolean isRedAlliance = DriverStation.getAlliance().isPresent()
         && DriverStation.getAlliance().get() == Alliance.Red;
     
@@ -76,8 +75,7 @@ public class TurretCommands {
         target = isRedAlliance ? RobotConstants.redHub : RobotConstants.blueHub;
         break;
       case DS_TRACKER:
-        // [TODO] Change to DS targets
-        target = isRedAlliance ? RobotConstants.redHub : RobotConstants.blueHub;
+        target = isRedAlliance ? new Translation2d(14, robotPose.getY()) : new Translation2d(2, robotPose.getY());
         break;
       case NORMAL:
       default:
@@ -98,11 +96,11 @@ public class TurretCommands {
         double angleRad = 0.0;
 
         if (Robot.mode == RobotMode.BOMBER) {
-          target = getBomberTarget();
+          target = getBomberTarget(robotPose);
           angleRad = 0.0;
           distanceMeters = Drive.getDistanceToTargetMeters(robotPose, target);
         } else {
-          target = getStrikerTarget();
+          target = getStrikerTarget(robotPose);
           angleRad = computeTurretAngleRad(robotPose, target);
           distanceMeters = Drive.getDistanceToTargetMeters(robotPose, target);
         }
@@ -122,7 +120,6 @@ public class TurretCommands {
         turret.setHoodAtInitialPosition();
         turret.stopFlywheel();
       }
-
-    });
+    }, turret);
   }
 }

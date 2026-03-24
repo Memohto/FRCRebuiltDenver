@@ -38,15 +38,18 @@ public class ShooterConstants {
     // Distance (meters) → hood angle offset in degrees from starting position
     public static final InterpolatingDoubleTreeMap kShooterHoodMap = new InterpolatingDoubleTreeMap();
     static {
-        kShooterHoodMap.put(1.5, 0.0);
-        kShooterHoodMap.put(6.0, 16.5);
+        kShooterHoodMap.put(1.0, 0.0);
+        kShooterHoodMap.put(4.0, 16.5);
     }
 
     // Distance (meters) → flywheel speed (0.0–1.0)
     public static final InterpolatingDoubleTreeMap kShooterFlywheelMap = new InterpolatingDoubleTreeMap();
     static {
-        kShooterFlywheelMap.put(1.5, 0.32);
-        kShooterFlywheelMap.put(3.75, 0.41);
-        kShooterFlywheelMap.put(6.0, 0.54);
+        kShooterFlywheelMap.put(1.0,0.33);
+        kShooterFlywheelMap.put(2.0, 0.37);
+        kShooterFlywheelMap.put(3.0, 0.41);
+        kShooterFlywheelMap.put(4.0, 0.46);
+        kShooterFlywheelMap.put(5.0, 0.52);
+        //kShooterFlywheelMap.put(6.0, 1.0);
     }
 }

@@ -22,6 +22,7 @@ import edu.wpi.first.wpilibj2.command.button.CommandXboxController;
 import edu.wpi.first.wpilibj2.command.sysid.SysIdRoutine;
 import frc.robot.commands.DriveCommands;
 import frc.robot.commands.IndexerCommands;
+import frc.robot.commands.IntakeCommands;
 import frc.robot.commands.ShooterCommands;
 import frc.robot.commands.TurretCommands;
 import frc.robot.constants.IndexerConstants;
@@ -228,16 +229,16 @@ public class RobotContainer {
       Logger.recordOutput("TurretMode", Turret.mode);
     }));
     driverJoystick.start().onTrue(Commands.runOnce(() -> {
+      Robot.mode = Turret.mode != TurretMode.HUB_TRACKER ? RobotMode.STRIKER : RobotMode.BOMBER;
       Turret.mode = Turret.mode != TurretMode.HUB_TRACKER ? TurretMode.HUB_TRACKER : TurretMode.NORMAL;
-      Robot.mode = Robot.mode != RobotMode.STRIKER ? RobotMode.STRIKER : RobotMode.BOMBER;
       Drive.mode = DriveMode.NORMAL;
       Logger.recordOutput("RobotMode", Robot.mode);
       Logger.recordOutput("DriveMode", Drive.mode);
       Logger.recordOutput("TurretMode", Turret.mode);
     }));
     driverJoystick.back().onTrue(Commands.runOnce(() -> {
+      Robot.mode = Turret.mode != TurretMode.DS_TRACKER ? RobotMode.STRIKER : RobotMode.BOMBER;
       Turret.mode = Turret.mode != TurretMode.DS_TRACKER ? TurretMode.DS_TRACKER : TurretMode.NORMAL;
-      Robot.mode = Robot.mode != RobotMode.STRIKER ? RobotMode.STRIKER : RobotMode.BOMBER;
       Drive.mode = DriveMode.NORMAL;
       Logger.recordOutput("RobotMode", Robot.mode);
       Logger.recordOutput("DriveMode", Drive.mode);
@@ -278,6 +279,12 @@ public class RobotContainer {
             shooter, turret,
             () -> mechanismsJoystick.x().getAsBoolean(),
             drive::getPose));
+
+    indexer.setDefaultCommand(
+        IndexerCommands.joystickIndexerCmd(
+            indexer,
+            () -> mechanismsJoystick.leftBumper().getAsBoolean(),
+            () -> mechanismsJoystick.rightBumper().getAsBoolean()));
 
     // Start flywheels at low speed for tests
     mechanismsJoystick.povUp()
@@ -340,12 +347,7 @@ public class RobotContainer {
                 },
                 intake));
 
-    // Shoot
-    indexer.setDefaultCommand(
-        IndexerCommands.joystickIndexerCmd(
-            indexer,
-            () -> mechanismsJoystick.leftBumper().getAsBoolean(),
-            () -> mechanismsJoystick.rightBumper().getAsBoolean()));
+    
   }
 
   /**

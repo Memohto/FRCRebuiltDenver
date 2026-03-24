@@ -23,7 +23,7 @@ public class ShooterCommands {
   private ShooterCommands() {
   }
 
-  private static Translation2d getBomberTarget() {
+  private static Translation2d getBomberTarget(Pose2d robotPose) {
     boolean isRedAlliance = DriverStation.getAlliance().isPresent()
         && DriverStation.getAlliance().get() == Alliance.Red;
 
@@ -33,8 +33,7 @@ public class ShooterCommands {
         target = isRedAlliance ? RobotConstants.redHub : RobotConstants.blueHub;
         break;
       case FEEDER:
-        // [TODO] Change to DS targets
-        target = isRedAlliance ? RobotConstants.redHub : RobotConstants.blueHub;
+        target = isRedAlliance ? new Translation2d(14, robotPose.getY()) : new Translation2d(2, robotPose.getY());
         break;
       case NORMAL:
       default:
@@ -52,7 +51,7 @@ public class ShooterCommands {
         () -> {
           if (shootSupplier.getAsBoolean() && Robot.mode == RobotMode.BOMBER) {
             Pose2d robotPose = robotPoseSupplier.get();
-            Translation2d target = getBomberTarget();
+            Translation2d target = getBomberTarget(robotPose);
             double distanceMeters = Drive.getDistanceToTargetMeters(robotPose, target);
 
             if (Drive.mode != DriveMode.NORMAL) {
