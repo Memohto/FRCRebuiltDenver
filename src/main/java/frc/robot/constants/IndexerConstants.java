@@ -8,7 +8,7 @@ public class IndexerConstants {
     public static final Slot0Configs rollersGains =
         new Slot0Configs().withKP(0.1).withKI(0).withKD(0).withKS(0).withKV(0.124);
     public static final double rollersGearRatio = 40/12;
-    public static final double rollersSpeed = 0.4;
+    public static final double rollersSpeed = 0.5;
     public static final double rollersStatorCurrentLimitAmps = 60;
     public static final double rollersSupplyCurrentLimitAmps = 30;
     public static final boolean rollersInverted = false;
@@ -18,7 +18,7 @@ public class IndexerConstants {
     public static final Slot0Configs shooterWheelsGains =
         new Slot0Configs().withKP(0.1).withKI(0).withKD(0).withKS(0).withKV(0.124);
     public static final double shooterWheelsGearRatio = 48/12;
-    public static final double shooterWheelsSpeed = 0.4;
+    public static final double shooterWheelsSpeed = 0.45;
     public static final double shooterWheelsStatorCurrentLimitAmps = 60;
     public static final double shooterWheelsSupplyCurrentLimitAmps = 30;
     public static final boolean shooterWheelsInverted = false;
@@ -28,7 +28,7 @@ public class IndexerConstants {
     public static final Slot0Configs turretWheelsGains =
         new Slot0Configs().withKP(0.1).withKI(0).withKD(0).withKS(0).withKV(0.124);
     public static final double turretWheelsGearRatio = 48/12;
-    public static final double turretWheelsSpeed = 0.4;
+    public static final double turretWheelsSpeed = 0.45;
     public static final double turretWheelsStatorCurrentLimitAmps = 60;
     public static final double turretWheelsSupplyCurrentLimitAmps = 30;
     public static final boolean turretWheelsInverted = true;
