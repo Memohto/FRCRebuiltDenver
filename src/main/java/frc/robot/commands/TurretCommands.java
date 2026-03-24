@@ -16,6 +16,7 @@ import java.util.function.Supplier;
 import edu.wpi.first.math.MathUtil;
 import edu.wpi.first.math.geometry.Pose2d;
 import edu.wpi.first.math.geometry.Translation2d;
+import edu.wpi.first.math.util.Units;
 import edu.wpi.first.wpilibj.DriverStation;
 import edu.wpi.first.wpilibj.DriverStation.Alliance;
 import edu.wpi.first.wpilibj2.command.Command;
@@ -108,12 +109,16 @@ public class TurretCommands {
         if (Drive.mode == DriveMode.NORMAL && Turret.mode == TurretMode.NORMAL) {
           turret.rotateToAngle(0.0);
           turret.setHoodAtInitialPosition();
-          turret.setFlywheelSpeed(ShooterConstants.flywheelDefaultSpeed);
+          // FIX 1: renamed flywheelDefaultSpeed → flywheelDefaultSpeedRPS
+          // FIX 2: map now returns RPS, so use setFlywheelVelocity instead of setFlywheelSpeed
+          turret.setFlywheelVelocity(
+              Units.rotationsToRadians(ShooterConstants.flywheelDefaultSpeedRPS));
         } else {
           turret.rotateToAngle(angleRad);
           turret.setHoodForDistance(distanceMeters);
-          double flyWheelSpeed = ShooterConstants.kShooterFlywheelMap.get(distanceMeters);
-          turret.setFlywheelSpeed(flyWheelSpeed);
+          // FIX 2: kShooterFlywheelMap now returns RPS — convert to rad/s for velocity control
+          double flyWheelSpeedRPS = ShooterConstants.kShooterFlywheelMap.get(distanceMeters);
+          turret.setFlywheelVelocity(Units.rotationsToRadians(flyWheelSpeedRPS));
         }
       } else {
         turret.rotateToAngle(0.0);

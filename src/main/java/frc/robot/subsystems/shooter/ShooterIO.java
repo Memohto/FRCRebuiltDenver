@@ -11,6 +11,7 @@ public interface ShooterIO {
         public double flywheelVelocityRadPerSec = 0.0;
         public double flywheelAppliedVolts = 0.0;
         public double flywheelCurrentAmps = 0.0;
+        public double flywheelTargetVelocityRadPerSec = 0.0; // NEW: for logging target vs actual
 
         public boolean hoodConnected = false;
         public Rotation2d hoodPosition = new Rotation2d();
@@ -26,6 +27,7 @@ public interface ShooterIO {
             table.put("flywheelVelocityRadPerSec", flywheelVelocityRadPerSec);
             table.put("flywheelAppliedVolts", flywheelAppliedVolts);
             table.put("flywheelCurrentAmps", flywheelCurrentAmps);
+            table.put("flywheelTargetVelocityRadPerSec", flywheelTargetVelocityRadPerSec); // NEW
 
             table.put("hoodConnected", hoodConnected);
             table.put("hoodPosition", hoodPosition);
@@ -40,6 +42,7 @@ public interface ShooterIO {
             flywheelVelocityRadPerSec = table.get("flywheelVelocityRadPerSec", flywheelVelocityRadPerSec);
             flywheelAppliedVolts = table.get("flywheelAppliedVolts", flywheelAppliedVolts);
             flywheelCurrentAmps = table.get("flywheelCurrentAmps", flywheelCurrentAmps);
+            flywheelTargetVelocityRadPerSec = table.get("flywheelTargetVelocityRadPerSec", flywheelTargetVelocityRadPerSec); // NEW
 
             hoodConnected = table.get("hoodConnected", hoodConnected);
             hoodPosition = table.get("hoodPosition", hoodPosition);
@@ -50,7 +53,20 @@ public interface ShooterIO {
     }
 
     public void updateInputs(ShooterIOInputs inputs);
+
+    /** Open-loop: sets raw duty cycle (-1.0 to 1.0). Use only for manual/override control. */
     public void setFlywheelOpenLoop(double speed);
+
+    /**
+     * Closed-loop velocity control.
+     * The TalonFX will continuously adjust voltage to maintain the target speed
+     * regardless of battery state. Uses Slot0 gains from ShooterConstants.flywheelGains.
+     *
+     * @param velocityRadPerSec Target flywheel speed in radians per second.
+     *                          Convert from RPS: velocityRPS * 2 * Math.PI
+     */
+    public void setFlywheelVelocity(double velocityRadPerSec);
+
     public void setHoodOpenLoop(double speed);
     public void setHoodPosition(Rotation2d rotation);
 }
