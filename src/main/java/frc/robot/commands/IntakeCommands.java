@@ -19,15 +19,15 @@ public class IntakeCommands {
                 boolean out = outtakeupplier.getAsBoolean() && !intakeupplier.getAsBoolean();
                 boolean extend = in || out;
 
-                if (extend && !intake.extensorIsAtPosition(Rotation2d.fromRadians(10), Rotation2d.fromRadians(0.2))) {
-                    intake.setExtensorPosition(Rotation2d.fromRadians(20));
+                if (extend ) {
+                    intake.setExtended();
                     if(in) {
                         intake.intake();
                     } else if (out) {
                         intake.outtake();
                     }
-                } else if (!extend && !intake.extensorIsAtPosition(Rotation2d.fromRadians(0), Rotation2d.fromRadians(0.2))) {
-                    intake.setExtensorPosition(Rotation2d.fromRadians(0));
+                } else if (!extend ) {
+                    intake.setExtendedReset();
                     intake.stopRollers();
                 } else {
                     intake.stopExtensor();

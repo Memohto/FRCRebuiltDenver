@@ -9,7 +9,6 @@ package frc.robot.subsystems.vision;
 
 import edu.wpi.first.math.geometry.Pose3d;
 import edu.wpi.first.math.geometry.Rotation2d;
-
 import org.littletonrobotics.junction.AutoLog;
 import org.littletonrobotics.junction.LogTable;
 import org.littletonrobotics.junction.inputs.LoggableInputs;
@@ -18,25 +17,29 @@ public interface VisionIO {
   @AutoLog
   public static class VisionIOInputs {
     public boolean connected = false;
-    public TargetObservation latestTargetObservation =
-        new TargetObservation(Rotation2d.kZero, Rotation2d.kZero);
+    public TargetObservation latestTargetObservation = new TargetObservation(Rotation2d.kZero, Rotation2d.kZero);
     public PoseObservation[] poseObservations = new PoseObservation[0];
     public int[] tagIds = new int[0];
+    public boolean hasTarget = false;
   }
 
   class VisionIOInputsAutoLogged extends VisionIOInputs implements LoggableInputs {
+    @Override
     public void toLog(LogTable table) {
-        table.put("connected", connected);
-        table.put("latestTargetObservation", latestTargetObservation);
-        table.put("poseObservations", poseObservations);
-        table.put("tagIds", tagIds);
+      table.put("connected", connected);
+      table.put("latestTargetObservation", latestTargetObservation);
+      table.put("poseObservations", poseObservations);
+      table.put("tagIds", tagIds);
+      table.put("hasTarget", hasTarget);
     }
 
+    @Override
     public void fromLog(LogTable table) {
-        connected = table.get("connected", connected);
-        latestTargetObservation = table.get("latestTargetObservation", latestTargetObservation);
-        poseObservations = table.get("poseObservations", poseObservations);
-        tagIds = table.get("tagIds", tagIds);
+      connected = table.get("connected", connected);
+      latestTargetObservation = table.get("latestTargetObservation", latestTargetObservation);
+      poseObservations = table.get("poseObservations", poseObservations);
+      tagIds = table.get("tagIds", tagIds);
+      hasTarget = table.get("hasTarget", hasTarget);
     }
   }
 

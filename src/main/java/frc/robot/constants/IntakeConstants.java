@@ -2,6 +2,7 @@ package frc.robot.constants;
 
 import com.ctre.phoenix6.configs.Slot0Configs;
 
+import edu.wpi.first.math.geometry.Rotation2d;
 import edu.wpi.first.math.util.Units;
 
 public class IntakeConstants {
@@ -20,10 +21,13 @@ public class IntakeConstants {
     // ── Extensor ───────────────────────────────────────────────────────────────
     public static final int extensorCanId = 20;
     public static final Slot0Configs extensorGains =
-        new Slot0Configs().withKP(0.1).withKI(0).withKD(0).withKS(0).withKV(0.124);
+        new Slot0Configs().withKP(10).withKI(0).withKD(0).withKS(0).withKV(0.124);
     public static final double extensorGearRatio = (54/12) * (36/18);
     public static final double extensorSpeed = 0.75;
     public static final double extensorStatorCurrentLimitAmps = 40;
     public static final double extensorSupplyCurrentLimitAmps = 20;
     public static final boolean extensorInverted = false;
+
+    public static final Rotation2d extendedRotation = Rotation2d.fromRadians(20);
+    public static final Rotation2d extendedRotationReversed = Rotation2d.fromRadians(3.5);
 }

@@ -1,6 +1,7 @@
 package frc.robot.subsystems.intake;
 
 import frc.robot.constants.IntakeConstants;
+import frc.robot.constants.ShooterConstants;
 import frc.robot.subsystems.intake.IntakeIO.IntakeIOInputsAutoLogged;
 
 import org.littletonrobotics.junction.Logger;
@@ -38,13 +39,18 @@ public class Intake extends SubsystemBase {
         io.setRollersOpenLoop(0.0);
     }
 
-    public void setExtensorPosition(Rotation2d position) {
-        io.setExtensorPosition(position);
-    }
-
     public boolean extensorIsAtPosition(Rotation2d target, Rotation2d tolerance) {
         return inputs.extensorPosition.getRadians() > target.getRadians() - tolerance.getRadians() &&
                inputs.extensorPosition.getRadians() < target.getRadians() + tolerance.getRadians();
+    }
+
+    public void setExtended() {
+        io.setExtensorPosition(IntakeConstants.extendedRotation);//constant
+    }
+
+    public void setExtendedReset() {
+        io.setExtensorPosition(IntakeConstants.extendedRotationReversed);//constant
+
     }
 
     public void extend() {

@@ -2,6 +2,8 @@ package frc.robot.subsystems.intake;
 
 import static frc.robot.util.PhoenixUtil.*;
 
+import org.littletonrobotics.junction.Logger;
+
 import frc.robot.constants.IntakeConstants;
 import frc.robot.constants.RobotConstants;
 
@@ -71,10 +73,10 @@ public class IntakeIOTalonFX implements IntakeIO {
         extensorConfig.MotorOutput.NeutralMode = NeutralModeValue.Brake;
         extensorConfig.Slot0 = IntakeConstants.extensorGains;
         extensorConfig.Feedback.SensorToMechanismRatio = IntakeConstants.extensorGearRatio;
-        extensorConfig.SoftwareLimitSwitch.ForwardSoftLimitEnable = true;
-        extensorConfig.SoftwareLimitSwitch.ReverseSoftLimitEnable = true;
-        extensorConfig.SoftwareLimitSwitch.ForwardSoftLimitThreshold = Rotation2d.fromRadians(20.5).getRotations(); // 20.5
-        extensorConfig.SoftwareLimitSwitch.ReverseSoftLimitThreshold = Rotation2d.fromRadians(2).getRotations(); // 2
+        // extensorConfig.SoftwareLimitSwitch.ReverseSoftLimitEnable = true;
+        // extensorConfig.SoftwareLimitSwitch.ForwardSoftLimitEnable = true;
+        // extensorConfig.SoftwareLimitSwitch.ForwardSoftLimitThreshold = Rotation2d.fromRadians(20.5).getRotations(); // 20.5
+        // extensorConfig.SoftwareLimitSwitch.ReverseSoftLimitThreshold = Rotation2d.fromRadians(2).getRotations(); // 2
         rollersConfig.CurrentLimits.StatorCurrentLimitEnable = true;
         rollersConfig.CurrentLimits.SupplyCurrentLimitEnable = true;
         rollersConfig.CurrentLimits.StatorCurrentLimit = IntakeConstants.extensorStatorCurrentLimitAmps;

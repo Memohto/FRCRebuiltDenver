@@ -48,6 +48,8 @@ public interface IntakeIO {
         }
     }
 
+    
+
     public void updateInputs(IntakeIOInputs inputs);
     public void setRollersOpenLoop(double speed);
     public void setExtensorOpenLoop(double speed);

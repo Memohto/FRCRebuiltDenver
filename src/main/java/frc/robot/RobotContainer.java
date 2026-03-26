@@ -323,31 +323,47 @@ public class RobotContainer {
                 },
                 intake));
 
-    // Extend
+     // Extend
     mechanismsJoystick.a()
-        .whileTrue(
-            Commands.runEnd(
+        .onTrue(
+            Commands.runOnce(
                 () -> {
-                  intake.extend();
-                },
-                () -> {
-                  intake.stopExtensor();
+                  intake.setExtended();
                 },
                 intake));
 
     // Retract
     mechanismsJoystick.b()
-        .whileTrue(
-            Commands.runEnd(
+        .onTrue(
+            Commands.runOnce(
                 () -> {
-                  intake.retract();
-                },
-                () -> {
-                  intake.stopExtensor();
+                  intake.setExtendedReset();
                 },
                 intake));
 
+    // // Extend
+    // mechanismsJoystick.a()
+    //     .whileTrue(
+    //         Commands.runEnd(
+    //             () -> {
+    //               intake.extend();
+    //             },
+    //             () -> {
+    //               intake.stopExtensor();
+    //             },
+    //             intake));
     
+    // // Retract
+    // mechanismsJoystick.b()
+    //     .whileTrue(
+    //         Commands.runEnd(
+    //             () -> {
+    //               intake.retract();
+    //             },
+    //             () -> {
+    //               intake.stopExtensor();
+    //             },
+    //             intake));
   }
 
   /**

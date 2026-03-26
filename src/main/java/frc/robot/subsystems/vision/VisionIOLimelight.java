@@ -49,6 +49,7 @@ public class VisionIOLimelight implements VisionIO {
     megatag1Subscriber = table.getDoubleArrayTopic("botpose_wpiblue").subscribe(new double[] {});
     megatag2Subscriber =
         table.getDoubleArrayTopic("botpose_orb_wpiblue").subscribe(new double[] {});
+    
   }
 
   @Override
@@ -136,6 +137,8 @@ public class VisionIOLimelight implements VisionIO {
     for (int id : tagIds) {
       inputs.tagIds[i++] = id;
     }
+
+    inputs.hasTarget = inputs.tagIds.length > 0;
   }
 
   /** Parses the 3D pose from a Limelight botpose array. */
