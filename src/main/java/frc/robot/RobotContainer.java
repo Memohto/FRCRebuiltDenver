@@ -162,25 +162,52 @@ public class RobotContainer {
         break;
     }
 
-    autoChooser = new LoggedDashboardChooser<>("Auto Choices", AutoBuilder.buildAutoChooser());
-
-    NamedCommands.registerCommand("StartFlywheels", Commands.runOnce(
-        () -> {
-          shooter.setFlywheelSpeed(0.3);
-          turret.setFlywheelSpeed(0.3);
-        }, shooter, turret).withTimeout(2));
-    NamedCommands.registerCommand("IndexBoth", Commands.sequence(
+    NamedCommands.registerCommand("AimTurret",
+        Commands.run(() -> {
+          boolean isRedAlliance = DriverStation.getAlliance().isPresent()
+              && DriverStation.getAlliance().get() == Alliance.Red;
+          double distanceM = Drive.getDistanceToTargetMeters(drive.getPose(),
+              isRedAlliance ? RobotConstants.redHub : RobotConstants.blueHub);
+          double angle = Turret.computeTurretAngleRad(drive.getPose(),
+              isRedAlliance ? RobotConstants.redHub : RobotConstants.blueHub);
+          turret.setFlywheelVelocityForDistance(distanceM);
+          turret.setHoodForDistance(distanceM);
+          turret.rotateToAngle(angle);
+        }, turret));
+    NamedCommands.registerCommand("ResetTurret",
+        Commands.runOnce(() -> {
+          turret.setHoodAtInitialPosition();
+          turret.stopFlywheel();
+          turret.rotateToAngle(0.0);
+        }, turret));
+    NamedCommands.registerCommand("IndexTurret", Commands.sequence(
         Commands.runOnce(() -> {
           indexer.intake();
         }, indexer),
         Commands.runOnce(() -> {
-          indexer.indexBoth();
+          indexer.indexTurret();
         }, indexer),
         Commands.waitSeconds(1),
         Commands.runOnce(() -> {
           indexer.outtake();
         }, indexer),
-        Commands.waitSeconds(0.25)).repeatedly().withTimeout(22));
+        Commands.waitSeconds(0.25)).repeatedly());
+    NamedCommands.registerCommand("ExtendIntake",
+        Commands.runOnce(() -> {
+          intake.setExtended();
+          intake.intake();
+        }, intake));
+    NamedCommands.registerCommand("RetractIntake",
+        Commands.runOnce(() -> intake.setExtendedReset(), intake));
+    NamedCommands.registerCommand("StartIntakeRollers",
+        Commands.sequence(
+            Commands.runOnce(() -> intake.intake(), intake),
+            Commands.waitSeconds(0.25),
+            Commands.runOnce(() -> intake.stopRollers(), intake),
+            Commands.waitSeconds(0.25)).repeatedly());
+    NamedCommands.registerCommand("StopIntakeRollers", Commands.runOnce(() -> intake.stopRollers(), intake));
+
+    autoChooser = new LoggedDashboardChooser<>("Auto Choices", AutoBuilder.buildAutoChooser());
 
     // Set up SysId routines
     autoChooser.addOption(
@@ -315,55 +342,60 @@ public class RobotContainer {
     // Intake
     mechanismsJoystick.leftTrigger(0.5)
         .whileTrue(
-            Commands.runEnd(
-                () -> {
-                  intake.intake();
-                }, () -> {
-                  intake.stopRollers();
-                },
-                intake));
+            Commands.sequence(
+                Commands.runOnce(() -> intake.intake(), intake),
+                Commands.waitSeconds(0.25),
+                Commands.runOnce(() -> intake.stopRollers(), intake),
+                Commands.waitSeconds(0.25)).repeatedly())
+        .onFalse(Commands.runOnce(() -> intake.stopRollers(), intake));
 
-     // Extend
+    // Extend
     mechanismsJoystick.a()
-        .onTrue(
-            Commands.runOnce(
+        .whileTrue(
+            Commands.startEnd(
                 () -> {
                   intake.setExtended();
+                },
+                () -> {
+                  intake.stopExtensor();
                 },
                 intake));
 
     // Retract
     mechanismsJoystick.b()
-        .onTrue(
-            Commands.runOnce(
+        .whileTrue(
+            Commands.startEnd(
                 () -> {
                   intake.setExtendedReset();
                 },
+                () -> {
+                  intake.stopExtensor();
+                },
                 intake));
 
-    // // Extend
-    // mechanismsJoystick.a()
-    //     .whileTrue(
-    //         Commands.runEnd(
-    //             () -> {
-    //               intake.extend();
-    //             },
-    //             () -> {
-    //               intake.stopExtensor();
-    //             },
-    //             intake));
-    
-    // // Retract
-    // mechanismsJoystick.b()
-    //     .whileTrue(
-    //         Commands.runEnd(
-    //             () -> {
-    //               intake.retract();
-    //             },
-    //             () -> {
-    //               intake.stopExtensor();
-    //             },
-    //             intake));
+    // Extend
+    mechanismsJoystick.start()
+        .whileTrue(
+            Commands.runEnd(
+                () -> {
+                  intake.extend();
+                },
+                () -> {
+                  intake.stopExtensor();
+                },
+                intake));
+
+    // Retract
+    mechanismsJoystick.back()
+        .whileTrue(
+            Commands.runEnd(
+                () -> {
+                  intake.retract();
+                },
+                () -> {
+                  intake.stopExtensor();
+                },
+                intake));
   }
 
   /**

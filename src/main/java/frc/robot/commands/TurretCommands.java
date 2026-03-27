@@ -27,26 +27,6 @@ public class TurretCommands {
   private TurretCommands() {
   }
 
-  // ── Core computations ──────────────────────────────────────────────────────
-
-  private static double computeTurretAngleRad(Pose2d robotPose, Translation2d fieldTarget) {
-    double dx = fieldTarget.getX() - robotPose.getX();
-    double dy = fieldTarget.getY() - robotPose.getY();
-    double worldAngle = Math.atan2(dy, dx);
-    double robotHeading = robotPose.getRotation().getRadians();
-
-    double rawAngle = worldAngle - robotHeading - TurretConstants.turretZeroOffsetRad;
-
-    double shifted = rawAngle - TurretConstants.minRotationRad;
-    shifted = shifted - Math.floor(shifted / (2.0 * Math.PI)) * (2.0 * Math.PI);
-    double targetAngle = shifted + TurretConstants.minRotationRad;
-
-    targetAngle = MathUtil.clamp(targetAngle,
-        TurretConstants.minRotationRad, TurretConstants.maxRotationRad);
-
-    return targetAngle;
-  }
-
   private static Translation2d getBomberTarget(Pose2d robotPose) {
     boolean isRedAlliance = DriverStation.getAlliance().isPresent()
         && DriverStation.getAlliance().get() == Alliance.Red;
@@ -102,7 +82,7 @@ public class TurretCommands {
           distanceMeters = Drive.getDistanceToTargetMeters(robotPose, target);
         } else {
           target = getStrikerTarget(robotPose);
-          angleRad = computeTurretAngleRad(robotPose, target);
+          angleRad = Turret.computeTurretAngleRad(robotPose, target);
           distanceMeters = Drive.getDistanceToTargetMeters(robotPose, target);
         }
 

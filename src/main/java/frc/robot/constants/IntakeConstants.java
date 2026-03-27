@@ -23,7 +23,7 @@ public class IntakeConstants {
     public static final Slot0Configs extensorGains =
         new Slot0Configs().withKP(10).withKI(0).withKD(0).withKS(0).withKV(0.124);
     public static final double extensorGearRatio = (54/12) * (36/18);
-    public static final double extensorSpeed = 0.75;
+    public static final double extensorSpeed = 0.24;
     public static final double extensorStatorCurrentLimitAmps = 40;
     public static final double extensorSupplyCurrentLimitAmps = 20;
     public static final boolean extensorInverted = false;
