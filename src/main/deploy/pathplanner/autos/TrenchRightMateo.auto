@@ -49,13 +49,25 @@
           }
         },
         {
+          "type": "path",
+          "data": {
+            "pathName": "pathRightMateo"
+          }
+        },
+        {
           "type": "deadline",
           "data": {
             "commands": [
               {
-                "type": "path",
+                "type": "wait",
                 "data": {
-                  "pathName": "TrenchRightToCenter"
+                  "waitTime": 5.0
+                }
+              },
+              {
+                "type": "named",
+                "data": {
+                  "name": "AimTurret"
                 }
               },
               {
@@ -63,15 +75,15 @@
                 "data": {
                   "commands": [
                     {
-                      "type": "named",
+                      "type": "wait",
                       "data": {
-                        "name": "ExtendIntake"
+                        "waitTime": 1.0
                       }
                     },
                     {
                       "type": "named",
                       "data": {
-                        "name": "StartIntakeRollers"
+                        "name": "IndexTurret"
                       }
                     }
                   ]
@@ -83,19 +95,13 @@
         {
           "type": "named",
           "data": {
-            "name": "StopIntakeRollers"
-          }
-        },
-        {
-          "type": "path",
-          "data": {
-            "pathName": "CenterToTrenchRight"
+            "name": "ResetTurret"
           }
         }
       ]
     }
   },
   "resetOdom": true,
-  "folder": "Trench1cicle",
+  "folder": "MateoOptimized",
   "choreoAuto": false
 }

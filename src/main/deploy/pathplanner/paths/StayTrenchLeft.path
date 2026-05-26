@@ -3,25 +3,25 @@
   "waypoints": [
     {
       "anchor": {
-        "x": 3.5732667617689007,
-        "y": 6.098716119828817
+        "x": 4.427218259629101,
+        "y": 7.41845934379458
       },
       "prevControl": null,
       "nextControl": {
-        "x": 3.3030239604029803,
-        "y": 6.081134881424882
+        "x": 4.677218259629101,
+        "y": 7.41845934379458
       },
       "isLocked": false,
-      "linkedName": null
+      "linkedName": "TrenchLeft"
     },
     {
       "anchor": {
-        "x": 1.347817403708987,
-        "y": 5.943452211126962
+        "x": 4.0,
+        "y": 7.41845934379458
       },
       "prevControl": {
-        "x": 1.870752214998768,
-        "y": 5.977159553522473
+        "x": 3.75,
+        "y": 7.41845934379458
       },
       "nextControl": null,
       "isLocked": false,
@@ -33,8 +33,8 @@
   "pointTowardsZones": [],
   "eventMarkers": [],
   "globalConstraints": {
-    "maxVelocity": 0.45,
-    "maxAcceleration": 0.4,
+    "maxVelocity": 3.0,
+    "maxAcceleration": 3.0,
     "maxAngularVelocity": 540.0,
     "maxAngularAcceleration": 720.0,
     "nominalVoltage": 12.0,
@@ -42,13 +42,13 @@
   },
   "goalEndState": {
     "velocity": 0,
-    "rotation": 180.0
+    "rotation": 0.0
   },
   "reversed": false,
-  "folder": null,
+  "folder": "trenchLeftMEMO",
   "idealStartingState": {
     "velocity": 0,
-    "rotation": 180.0
+    "rotation": 0.0
   },
-  "useDefaultConstraints": false
+  "useDefaultConstraints": true
 }

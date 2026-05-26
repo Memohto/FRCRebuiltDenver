@@ -44,10 +44,8 @@ public class IntakeIOTalonFX implements IntakeIO {
     private final StatusSignal<Current> extensorCurrent;
 
     // Connection debouncers
-    private final Debouncer rollersConnectedDebounce =
-        new Debouncer(0.5, Debouncer.DebounceType.kFalling);
-    private final Debouncer extensorConnectedDebounce =
-        new Debouncer(0.5, Debouncer.DebounceType.kFalling);
+    private final Debouncer rollersConnectedDebounce = new Debouncer(0.5, Debouncer.DebounceType.kFalling);
+    private final Debouncer extensorConnectedDebounce = new Debouncer(0.5, Debouncer.DebounceType.kFalling);
 
     public IntakeIOTalonFX(int rollersCanId, int extensorCanId) {
         this.rollers = new TalonFX(rollersCanId);
@@ -62,9 +60,9 @@ public class IntakeIOTalonFX implements IntakeIO {
         rollersConfig.CurrentLimits.SupplyCurrentLimitEnable = true;
         rollersConfig.CurrentLimits.StatorCurrentLimit = IntakeConstants.rollersStatorCurrentLimitAmps;
         rollersConfig.CurrentLimits.SupplyCurrentLimit = IntakeConstants.rollersSupplyCurrentLimitAmps;
-        rollersConfig.MotorOutput.Inverted =  IntakeConstants.rollersInverted
-            ? InvertedValue.CounterClockwise_Positive 
-            : InvertedValue.Clockwise_Positive;
+        rollersConfig.MotorOutput.Inverted = IntakeConstants.rollersInverted
+                ? InvertedValue.CounterClockwise_Positive
+                : InvertedValue.Clockwise_Positive;
         tryUntilOk(5, () -> rollers.getConfigurator().apply(rollersConfig, 0.25));
         tryUntilOk(5, () -> rollers.setPosition(0.0, 0.25));
 
@@ -73,17 +71,19 @@ public class IntakeIOTalonFX implements IntakeIO {
         extensorConfig.MotorOutput.NeutralMode = NeutralModeValue.Brake;
         extensorConfig.Slot0 = IntakeConstants.extensorGains;
         extensorConfig.Feedback.SensorToMechanismRatio = IntakeConstants.extensorGearRatio;
-        // extensorConfig.SoftwareLimitSwitch.ReverseSoftLimitEnable = true;
-        // extensorConfig.SoftwareLimitSwitch.ForwardSoftLimitEnable = true;
-        // extensorConfig.SoftwareLimitSwitch.ForwardSoftLimitThreshold = Rotation2d.fromRadians(20.5).getRotations(); // 20.5
-        // extensorConfig.SoftwareLimitSwitch.ReverseSoftLimitThreshold = Rotation2d.fromRadians(2).getRotations(); // 2
-        rollersConfig.CurrentLimits.StatorCurrentLimitEnable = true;
-        rollersConfig.CurrentLimits.SupplyCurrentLimitEnable = true;
-        rollersConfig.CurrentLimits.StatorCurrentLimit = IntakeConstants.extensorStatorCurrentLimitAmps;
-        rollersConfig.CurrentLimits.SupplyCurrentLimit = IntakeConstants.extensorSupplyCurrentLimitAmps;
-        extensorConfig.MotorOutput.Inverted = IntakeConstants.extensorInverted 
-            ? InvertedValue.CounterClockwise_Positive 
-            : InvertedValue.Clockwise_Positive;
+
+        extensorConfig.SoftwareLimitSwitch.ReverseSoftLimitEnable = true;
+        extensorConfig.SoftwareLimitSwitch.ForwardSoftLimitEnable = true;
+        extensorConfig.SoftwareLimitSwitch.ForwardSoftLimitThreshold = Rotation2d.fromRadians(20.5).getRotations(); // 20.5
+        extensorConfig.SoftwareLimitSwitch.ReverseSoftLimitThreshold = Rotation2d.fromRadians(2).getRotations(); // 2
+
+        extensorConfig.CurrentLimits.StatorCurrentLimitEnable = true;
+        extensorConfig.CurrentLimits.SupplyCurrentLimitEnable = true;
+        extensorConfig.CurrentLimits.StatorCurrentLimit = IntakeConstants.extensorStatorCurrentLimitAmps;
+        extensorConfig.CurrentLimits.SupplyCurrentLimit = IntakeConstants.extensorSupplyCurrentLimitAmps;
+        extensorConfig.MotorOutput.Inverted = IntakeConstants.extensorInverted
+                ? InvertedValue.CounterClockwise_Positive
+                : InvertedValue.Clockwise_Positive;
         tryUntilOk(5, () -> extensor.getConfigurator().apply(extensorConfig, 0.25));
         tryUntilOk(5, () -> extensor.setPosition(0.0, 0.25));
 
@@ -91,35 +91,34 @@ public class IntakeIOTalonFX implements IntakeIO {
         rollersVelocity = rollers.getVelocity();
         rollersAppliedVolts = rollers.getMotorVoltage();
         rollersCurrent = rollers.getStatorCurrent();
-        
+
         // Create turn status signals
         extensorPosition = extensor.getPosition();
         extensorVelocity = extensor.getVelocity();
         extensorAppliedVolts = extensor.getMotorVoltage();
         extensorCurrent = extensor.getStatorCurrent();
-        
+
         // Configure periodic frames
         BaseStatusSignal.setUpdateFrequencyForAll(
-            RobotConstants.highPriorityFrequencyHz, 
-            extensorPosition);
+                RobotConstants.highPriorityFrequencyHz,
+                extensorPosition);
         BaseStatusSignal.setUpdateFrequencyForAll(
-            RobotConstants.lowPriorityFrequencyHz,
-            rollersVelocity,
-            rollersAppliedVolts,
-            rollersCurrent,
-            extensorVelocity,
-            extensorAppliedVolts,
-            extensorCurrent);
+                RobotConstants.lowPriorityFrequencyHz,
+                rollersVelocity,
+                rollersAppliedVolts,
+                rollersCurrent,
+                extensorVelocity,
+                extensorAppliedVolts,
+                extensorCurrent);
         ParentDevice.optimizeBusUtilizationForAll(rollers, extensor);
     }
 
     @Override
     public void updateInputs(IntakeIOInputs inputs) {
         // Refresh all signals
-        var rollersStatus =
-            BaseStatusSignal.refreshAll(rollersVelocity, rollersAppliedVolts, rollersCurrent);
-        var extensorStatus =
-            BaseStatusSignal.refreshAll(extensorPosition, extensorVelocity, extensorAppliedVolts, extensorCurrent);
+        var rollersStatus = BaseStatusSignal.refreshAll(rollersVelocity, rollersAppliedVolts, rollersCurrent);
+        var extensorStatus = BaseStatusSignal.refreshAll(extensorPosition, extensorVelocity, extensorAppliedVolts,
+                extensorCurrent);
 
         // Update rollers inputs
         inputs.rollersConnected = rollersConnectedDebounce.calculate(rollersStatus.isOK());
@@ -148,5 +147,27 @@ public class IntakeIOTalonFX implements IntakeIO {
     @Override
     public void setExtensorPosition(Rotation2d rotation) {
         extensor.setControl(positionVoltageRequest.withPosition(rotation.getRotations()));
+    }
+
+    public void setSoftwareLimit(boolean value) {
+        var extensorConfig = new TalonFXConfiguration();
+        extensorConfig.MotorOutput.NeutralMode = NeutralModeValue.Brake;
+        extensorConfig.Slot0 = IntakeConstants.extensorGains;
+        extensorConfig.Feedback.SensorToMechanismRatio = IntakeConstants.extensorGearRatio;
+
+        extensorConfig.SoftwareLimitSwitch.ReverseSoftLimitEnable = value;
+        extensorConfig.SoftwareLimitSwitch.ForwardSoftLimitEnable = value;
+        extensorConfig.SoftwareLimitSwitch.ForwardSoftLimitThreshold = Rotation2d.fromRadians(20.5).getRotations(); // 20.5
+        extensorConfig.SoftwareLimitSwitch.ReverseSoftLimitThreshold = Rotation2d.fromRadians(2).getRotations(); // 2
+
+        extensorConfig.CurrentLimits.StatorCurrentLimitEnable = true;
+        extensorConfig.CurrentLimits.SupplyCurrentLimitEnable = true;
+        extensorConfig.CurrentLimits.StatorCurrentLimit = IntakeConstants.extensorStatorCurrentLimitAmps;
+        extensorConfig.CurrentLimits.SupplyCurrentLimit = IntakeConstants.extensorSupplyCurrentLimitAmps;
+        extensorConfig.MotorOutput.Inverted = IntakeConstants.extensorInverted
+                ? InvertedValue.CounterClockwise_Positive
+                : InvertedValue.Clockwise_Positive;
+
+        extensor.getConfigurator().apply(extensorConfig, 0.25);
     }
 }

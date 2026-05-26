@@ -62,16 +62,7 @@ public class ShooterConstants {
         kShooterHoodMap.put(1.0,  0.0);
         kShooterHoodMap.put(4.0, 16.5);
     }
-
-    // Distance (meters) → flywheel speed in RPS (rotations per second).
-    //
-    // CONVERTED from the original 0.0–1.0 duty cycle values by multiplying by 100
-    // (Kraken X60 free speed ≈ 100 RPS at 12V).
-    //
-    // These are starting points — re-tune on the real robot by:
-    //   1. Commanding a distance and watching AdvantageScope "Shooter/FlywheelVelocityErrorRadPerSec"
-    //   2. If shots are going short → increase the RPS for that distance
-    //   3. If shots are going long  → decrease the RPS for that distance
+    // FLYWHEEL
     public static final InterpolatingDoubleTreeMap kShooterFlywheelMap = new InterpolatingDoubleTreeMap();
     static {
         kShooterFlywheelMap.put(1.0, 33.0);  // was 0.33

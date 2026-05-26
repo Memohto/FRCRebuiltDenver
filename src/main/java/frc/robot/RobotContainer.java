@@ -57,6 +57,7 @@ import frc.robot.subsystems.vision.VisionIO;
 import frc.robot.subsystems.vision.VisionIOLimelight;
 import frc.robot.subsystems.vision.VisionIOPhotonVisionSim;
 import static frc.robot.constants.VisionConstants.*;
+import frc.robot.Timer;
 
 import org.littletonrobotics.junction.Logger;
 import org.littletonrobotics.junction.networktables.LoggedDashboardChooser;
@@ -75,6 +76,10 @@ public class RobotContainer {
 
   // Dashboard inputs
   private final LoggedDashboardChooser<Command> autoChooser;
+
+  // instanciar timer
+  @SuppressWarnings("unused")
+  private final Timer timer = new Timer(); // basta con instanciarla
 
   /**
    * The container for the robot. Contains subsystems, OI devices, and commands.
@@ -186,6 +191,18 @@ public class RobotContainer {
         }, indexer),
         Commands.runOnce(() -> {
           indexer.indexTurret();
+        }, indexer),
+        Commands.waitSeconds(1),
+        Commands.runOnce(() -> {
+          indexer.outtake();
+        }, indexer),
+        Commands.waitSeconds(0.25)).repeatedly());
+    NamedCommands.registerCommand("IndexBoth", Commands.sequence(
+        Commands.runOnce(() -> {
+          indexer.intake();
+        }, indexer),
+        Commands.runOnce(() -> {
+          indexer.indexBoth();
         }, indexer),
         Commands.waitSeconds(1),
         Commands.runOnce(() -> {
@@ -342,12 +359,14 @@ public class RobotContainer {
     // Intake
     mechanismsJoystick.leftTrigger(0.5)
         .whileTrue(
-            Commands.sequence(
-                Commands.runOnce(() -> intake.intake(), intake),
-                Commands.waitSeconds(0.25),
-                Commands.runOnce(() -> intake.stopRollers(), intake),
-                Commands.waitSeconds(0.25)).repeatedly())
-        .onFalse(Commands.runOnce(() -> intake.stopRollers(), intake));
+            Commands.startEnd(
+                () -> {
+                  intake.intake();
+                },
+                () -> {
+                  intake.stopRollers();
+                }, 
+                intake));
 
     // Extend
     mechanismsJoystick.a()
@@ -378,9 +397,11 @@ public class RobotContainer {
         .whileTrue(
             Commands.runEnd(
                 () -> {
+                  intake.setSoftwareLimit(false);
                   intake.extend();
                 },
                 () -> {
+                  intake.setSoftwareLimit(true);
                   intake.stopExtensor();
                 },
                 intake));
@@ -390,9 +411,11 @@ public class RobotContainer {
         .whileTrue(
             Commands.runEnd(
                 () -> {
+                  intake.setSoftwareLimit(false);
                   intake.retract();
                 },
                 () -> {
+                  intake.setSoftwareLimit(true);
                   intake.stopExtensor();
                 },
                 intake));

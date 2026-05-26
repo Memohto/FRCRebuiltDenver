@@ -14,7 +14,7 @@ public class IntakeConstants {
         new Slot0Configs().withKP(0.1).withKI(0).withKD(0);
     public static final double rollersGearRatio = (20/12);
     public static final double rollersSpeed = 0.8;
-    public static final double rollersStatorCurrentLimitAmps = 60;
+    public static final double rollersStatorCurrentLimitAmps = 100;
     public static final double rollersSupplyCurrentLimitAmps = 30;
     public static final boolean rollersInverted = false;
 

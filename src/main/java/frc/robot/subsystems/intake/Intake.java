@@ -65,4 +65,8 @@ public class Intake extends SubsystemBase {
         io.setExtensorOpenLoop(0.0);
     }
 
+    public void setSoftwareLimit(boolean value){
+        io.setSoftwareLimit(value);
+    }
+
 }

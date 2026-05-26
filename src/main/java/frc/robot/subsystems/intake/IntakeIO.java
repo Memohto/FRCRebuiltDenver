@@ -54,4 +54,5 @@ public interface IntakeIO {
     public void setRollersOpenLoop(double speed);
     public void setExtensorOpenLoop(double speed);
     public void setExtensorPosition(Rotation2d rotation);
+    public default void setSoftwareLimit(boolean value){}
 }
