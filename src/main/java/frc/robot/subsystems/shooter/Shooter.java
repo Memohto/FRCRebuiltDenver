@@ -3,6 +3,7 @@ package frc.robot.subsystems.shooter;
 import org.littletonrobotics.junction.Logger;
 
 import edu.wpi.first.math.geometry.Rotation2d;
+import edu.wpi.first.math.interpolation.InterpolatingDoubleTreeMap;
 import edu.wpi.first.math.util.Units;
 import edu.wpi.first.wpilibj2.command.SubsystemBase;
 import frc.robot.constants.ShooterConstants;
@@ -12,6 +13,17 @@ public class Shooter extends SubsystemBase {
     private final ShooterIO io;
     public final ShooterIOInputsAutoLogged inputs = new ShooterIOInputsAutoLogged();
 
+    /**
+     * Clave bajo la que este shooter escribe al log.
+     *
+     * <p>
+     * Existe porque {@link frc.robot.subsystems.turret.Turret} hereda de esta
+     * clase: sin esto, la torreta y el shooter fijo escribían los dos a la tabla
+     * "Shooter" y se pisaban en cada ciclo, haciendo imposible saber en el log
+     * cuál de los dos cañones hizo qué.
+     */
+    protected String logKey = "Shooter";
+
     public Shooter(ShooterIO io) {
         this.io = io;
     }
@@ -19,12 +31,12 @@ public class Shooter extends SubsystemBase {
     @Override
     public void periodic() {
         io.updateInputs(inputs);
-        Logger.processInputs("Shooter", inputs);
+        Logger.processInputs(logKey, inputs);
 
         // Log error between target and actual for tuning kV/kP
         double velocityError = inputs.flywheelTargetVelocityRadPerSec - inputs.flywheelVelocityRadPerSec;
-        Logger.recordOutput("Shooter/FlywheelVelocityErrorRadPerSec", velocityError);
-        Logger.recordOutput("Shooter/FlywheelAtSpeed", isFlywheelAtSpeed());
+        Logger.recordOutput(logKey + "/FlywheelVelocityErrorRadPerSec", velocityError);
+        Logger.recordOutput(logKey + "/FlywheelAtSpeed", isFlywheelAtSpeed());
     }
 
     // ── Flywheel ──────────────────────────────────────────────────────────────
@@ -100,5 +112,32 @@ public class Shooter extends SubsystemBase {
 
     public void setHoodAtInitialPosition() {
         io.setHoodPosition(new Rotation2d());
+    }
+
+    // ══════════════════════════════════════════════════════════════════════════
+    // Overloads genéricos — permiten usar mapas de tiro distintos (competencia
+    // vs. tiro suave de demo) sin duplicar la lógica de control.
+    // ══════════════════════════════════════════════════════════════════════════
+
+    /**
+     * Velocidad de flywheel desde un mapa arbitrario, con tope duro opcional.
+     *
+     * @param map            Mapa distancia (m) → RPS.
+     * @param distanceMeters Distancia al objetivo.
+     * @param maxRPS         Tope duro. Ningún valor del mapa puede excederlo.
+     *                       Es la red de seguridad del modo demo: aunque alguien
+     *                       edite el mapa mal, el robot no puede disparar un
+     *                       torpedo a un alumno.
+     */
+    public void setFlywheelVelocityFromMap(
+            InterpolatingDoubleTreeMap map, double distanceMeters, double maxRPS) {
+        double velocityRPS = Math.min(map.get(distanceMeters), maxRPS);
+        Logger.recordOutput(logKey + "/FlywheelTargetRPS", velocityRPS);
+        setFlywheelVelocity(Units.rotationsToRadians(velocityRPS));
+    }
+
+    /** Ángulo de hood desde un mapa arbitrario. */
+    public void setHoodFromMap(InterpolatingDoubleTreeMap map, double distanceMeters) {
+        setHoodPosition(Rotation2d.fromDegrees(map.get(distanceMeters)));
     }
 }

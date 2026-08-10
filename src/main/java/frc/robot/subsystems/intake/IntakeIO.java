@@ -13,6 +13,19 @@ public interface IntakeIO {
 
         public boolean extensorConnected = false;
         public Rotation2d extensorPosition = new Rotation2d();
+
+        /**
+         * Posición del extensor en radianes crudos, SIN envolver.
+         *
+         * <p>
+         * El extensor recorre unos 20 radianes de punta a punta, así que un
+         * {@code Rotation2d} es el tipo equivocado para leerlo: cualquier
+         * operación aritmética sobre él lo normaliza a ±π y las posiciones
+         * grandes se vuelven basura. Este campo es el que debe usar la lógica de
+         * control.
+         */
+        public double extensorPositionRad = 0.0;
+
         public double extensorVelocityRadPerSec = 0.0;
         public double extensorAppliedVolts = 0.0;
         public double extensorCurrentAmps = 0.0;
@@ -28,6 +41,7 @@ public interface IntakeIO {
 
             table.put("extensorConnected", extensorConnected);
             table.put("extensorPosition", extensorPosition);
+            table.put("extensorPositionRad", extensorPositionRad);
             table.put("extensorVelocityRadPerSec", extensorVelocityRadPerSec);
             table.put("extensorAppliedVolts", extensorAppliedVolts);
             table.put("extensorCurrentAmps", extensorCurrentAmps);
@@ -42,6 +56,7 @@ public interface IntakeIO {
 
             extensorConnected = table.get("extensorConnected", extensorConnected);
             extensorPosition = table.get("extensorPosition", extensorPosition);
+            extensorPositionRad = table.get("extensorPositionRad", extensorPositionRad);
             extensorVelocityRadPerSec = table.get("extensorVelocityRadPerSec", extensorVelocityRadPerSec);
             extensorAppliedVolts = table.get("extensorAppliedVolts", extensorAppliedVolts);
             extensorCurrentAmps = table.get("extensorCurrentAmps", extensorCurrentAmps);

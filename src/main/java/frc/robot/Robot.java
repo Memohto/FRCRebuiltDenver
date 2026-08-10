@@ -7,10 +7,14 @@
 
 package frc.robot;
 
+import edu.wpi.first.net.WebServer;
+import edu.wpi.first.wpilibj.Filesystem;
 import edu.wpi.first.wpilibj2.command.Command;
 import edu.wpi.first.wpilibj2.command.CommandScheduler;
 import frc.robot.constants.RobotConstants;
 import frc.robot.constants.RobotConstants.RobotMode;
+import frc.robot.util.DemoDashboard;
+import frc.robot.util.DemoState;
 
 import org.littletonrobotics.junction.LogFileUtil;
 import org.littletonrobotics.junction.LoggedRobot;
@@ -72,6 +76,11 @@ public class Robot extends LoggedRobot {
     // Start AdvantageKit logger
     Logger.start();
 
+    // Servidor web del deploy folder. Permite que Elastic descargue el layout
+    // directamente del robot con Ctrl+D → "Load Layout From Robot", en vez de
+    // andar pasando el archivo por USB entre las laptops del equipo.
+    WebServer.start(5800, Filesystem.getDeployDirectory().getPath());
+
     // Instantiate our RobotContainer. This will perform all our button bindings,
     // and put our autonomous chooser on the dashboard.
     robotContainer = new RobotContainer();
@@ -86,12 +95,23 @@ public class Robot extends LoggedRobot {
     // finished or interrupted commands, and running subsystem periodic() methods.
     // This must be called from the robot's periodic block in order for anything in
     // the Command-based framework to work.
-    CommandScheduler.getInstance().run();        
+    CommandScheduler.getInstance().run();
+
+    // Se loguea cada ciclo (y no sólo al cambiar) para poder graficar el estado
+    // contra el video de la demo en AdvantageScope.
+    if (RobotConstants.isDemoMode) {
+      DemoState.log();
+      DemoDashboard.publish();
+    }
   }
 
   /** This function is called once when the robot is disabled. */
   @Override
-  public void disabledInit() {}
+  public void disabledInit() {
+    if (RobotConstants.isDemoMode) {
+      DemoDashboard.reset();
+    }
+  }
 
   /** This function is called periodically when disabled. */
   @Override
@@ -121,6 +141,13 @@ public class Robot extends LoggedRobot {
     // this line or comment it out.
     if (autonomousCommand != null) {
       autonomousCommand.cancel();
+    }
+
+    // Arranca siempre en el estado seguro: STRIKER, sin target fijado y sin
+    // follow-me activo. Sin esto, el robot podría empezar a seguir a alguien en
+    // cuanto lo habilitas porque quedó ese estado de la sesión anterior.
+    if (RobotConstants.isDemoMode) {
+      DemoState.reset();
     }
   }
 

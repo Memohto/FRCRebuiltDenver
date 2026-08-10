@@ -57,6 +57,11 @@ public class Intake extends SubsystemBase {
         io.setExtensorOpenLoop(IntakeConstants.extensorSpeed);
     }
 
+    /** Empuje hacia afuera a velocidad arbitraria. Lo usa el homing por corriente. */
+    public void extendAtSpeed(double speed) {
+        io.setExtensorOpenLoop(Math.abs(speed));
+    }
+
     public void retract() {
         io.setExtensorOpenLoop(-IntakeConstants.extensorSpeed);
     }
@@ -69,4 +74,39 @@ public class Intake extends SubsystemBase {
         io.setSoftwareLimit(value);
     }
 
+    // ══════════════════════════════════════════════════════════════════════════
+    // Helpers para el Demo Mode
+    // ══════════════════════════════════════════════════════════════════════════
+
+    /**
+     * Comanda el extensor a una posición arbitraria en radianes.
+     *
+     * <p>
+     * A diferencia de {@code setExtended()} / {@code setExtendedReset()}, que van
+     * a dos posiciones fijas, esto permite trayectorias continuas. Lo usa la
+     * secuencia de agitación para oscilar la caja.
+     */
+    public void setExtensorPositionRad(double positionRad) {
+        io.setExtensorPosition(Rotation2d.fromRadians(positionRad));
+    }
+
+    /** Velocidad del rodillo en lazo abierto. Positivo = hacia adentro. */
+    public void setRollersOpenLoop(double speed) {
+        io.setRollersOpenLoop(speed);
+    }
+
+    /** Posición del extensor en radianes crudos, sin envolver. */
+    public double getExtensorPositionRad() {
+        return inputs.extensorPositionRad;
+    }
+
+    /** Corriente de estator del extensor. Es lo que detecta el tope mecánico. */
+    public double getExtensorCurrentAmps() {
+        return inputs.extensorCurrentAmps;
+    }
+
+    /** Congela el extensor donde está ahora mismo. */
+    public void holdExtensorHere() {
+        setExtensorPositionRad(getExtensorPositionRad());
+    }
 }

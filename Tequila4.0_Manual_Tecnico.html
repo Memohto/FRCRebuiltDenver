@@ -1,0 +1,1183 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Tequila 4.0 — Manual Técnico de Software | FRC 6702 Stingbots</title>
+<style>
+:root{
+  --bg:#0b0f19;
+  --bg2:#111726;
+  --panel:#151d2e;
+  --panel2:#1b2437;
+  --line:#26314a;
+  --txt:#e6ebf5;
+  --dim:#93a0b8;
+  --amber:#ffc233;
+  --amber-d:#e0a400;
+  --cyan:#3ecfff;
+  --green:#3ddc97;
+  --red:#ff5c6c;
+  --purple:#b490ff;
+  --mono:'SF Mono',ui-monospace,'Cascadia Code',Consolas,monospace;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+body{
+  background:var(--bg);
+  color:var(--txt);
+  font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;
+  line-height:1.6;
+  -webkit-font-smoothing:antialiased;
+}
+a{color:var(--cyan)}
+code,.mono{font-family:var(--mono);font-size:.87em}
+code{background:#0d1220;border:1px solid var(--line);padding:1px 6px;border-radius:5px;color:var(--amber)}
+
+/* ---------- HEADER ---------- */
+header{
+  background:linear-gradient(160deg,#101828 0%,#0b0f19 60%);
+  border-bottom:1px solid var(--line);
+  padding:44px 24px 34px;
+  position:relative;overflow:hidden;
+}
+header::after{
+  content:'';position:absolute;inset:0;
+  background:radial-gradient(circle at 82% 18%,rgba(255,194,51,.13),transparent 55%);
+  pointer-events:none;
+}
+.hwrap{max-width:1180px;margin:0 auto;position:relative;z-index:1}
+.eyebrow{
+  font-size:.72rem;letter-spacing:.22em;text-transform:uppercase;
+  color:var(--amber);font-weight:700;margin-bottom:10px;
+}
+h1{font-size:2.7rem;line-height:1.1;letter-spacing:-.02em;font-weight:800}
+h1 span{color:var(--amber)}
+.sub{color:var(--dim);margin-top:12px;max-width:760px;font-size:1.02rem}
+.chips{display:flex;flex-wrap:wrap;gap:8px;margin-top:22px}
+.chip{
+  background:var(--panel);border:1px solid var(--line);border-radius:999px;
+  padding:5px 14px;font-size:.78rem;color:var(--dim);
+}
+.chip b{color:var(--txt);font-weight:600}
+
+/* ---------- NAV ---------- */
+nav{
+  position:sticky;top:0;z-index:50;
+  background:rgba(11,15,25,.93);
+  backdrop-filter:blur(14px);
+  border-bottom:1px solid var(--line);
+}
+.navwrap{
+  max-width:1180px;margin:0 auto;padding:0 24px;
+  display:flex;gap:2px;overflow-x:auto;scrollbar-width:none;
+}
+.navwrap::-webkit-scrollbar{display:none}
+.tab{
+  background:none;border:none;color:var(--dim);
+  padding:15px 15px 13px;font-size:.86rem;font-weight:600;
+  cursor:pointer;white-space:nowrap;
+  border-bottom:2px solid transparent;transition:.15s;
+  font-family:inherit;
+}
+.tab:hover{color:var(--txt)}
+.tab.on{color:var(--amber);border-bottom-color:var(--amber)}
+
+/* ---------- LAYOUT ---------- */
+main{max-width:1180px;margin:0 auto;padding:34px 24px 90px}
+.page{display:none;animation:fade .28s ease}
+.page.on{display:block}
+@keyframes fade{from{opacity:0;transform:translateY(7px)}to{opacity:1;transform:none}}
+h2{font-size:1.65rem;font-weight:750;letter-spacing:-.01em;margin:0 0 6px}
+h2 .num{color:var(--amber);font-family:var(--mono);font-size:.95rem;margin-right:10px;opacity:.8}
+h3{font-size:1.12rem;font-weight:700;margin:30px 0 12px;color:var(--txt)}
+h4{font-size:.96rem;font-weight:700;margin:18px 0 8px;color:var(--amber)}
+p{color:#c3ccdd;margin-bottom:13px}
+.lead{color:var(--dim);margin-bottom:26px;font-size:1.02rem;max-width:840px}
+ul,ol{margin:0 0 14px 20px;color:#c3ccdd}
+li{margin-bottom:6px}
+hr{border:none;border-top:1px solid var(--line);margin:34px 0}
+
+.card{
+  background:var(--panel);border:1px solid var(--line);
+  border-radius:13px;padding:20px 22px;margin-bottom:16px;
+}
+.grid{display:grid;gap:14px}
+.g2{grid-template-columns:repeat(auto-fit,minmax(300px,1fr))}
+.g3{grid-template-columns:repeat(auto-fit,minmax(230px,1fr))}
+.g4{grid-template-columns:repeat(auto-fit,minmax(170px,1fr))}
+
+.stat{background:var(--panel);border:1px solid var(--line);border-radius:11px;padding:16px}
+.stat .v{font-size:1.5rem;font-weight:750;color:var(--amber);font-family:var(--mono);line-height:1.2}
+.stat .k{font-size:.74rem;color:var(--dim);text-transform:uppercase;letter-spacing:.09em;margin-top:5px}
+
+table{width:100%;border-collapse:collapse;font-size:.86rem;margin:12px 0}
+th{
+  text-align:left;padding:10px 12px;background:var(--bg2);
+  color:var(--dim);font-size:.72rem;text-transform:uppercase;letter-spacing:.09em;
+  border-bottom:1px solid var(--line);font-weight:700;
+}
+td{padding:10px 12px;border-bottom:1px solid var(--line);color:#c3ccdd;vertical-align:top}
+tr:last-child td{border-bottom:none}
+tbody tr:hover{background:rgba(255,255,255,.022)}
+td .mono{color:var(--cyan)}
+.tblwrap{overflow-x:auto;border:1px solid var(--line);border-radius:11px;background:var(--panel)}
+.tblwrap table{margin:0}
+
+.tag{
+  display:inline-block;padding:2px 9px;border-radius:6px;
+  font-size:.7rem;font-weight:700;letter-spacing:.04em;text-transform:uppercase;
+}
+.t-crit{background:rgba(255,92,108,.14);color:var(--red);border:1px solid rgba(255,92,108,.35)}
+.t-med{background:rgba(255,194,51,.13);color:var(--amber);border:1px solid rgba(255,194,51,.32)}
+.t-low{background:rgba(62,207,255,.12);color:var(--cyan);border:1px solid rgba(62,207,255,.3)}
+.t-ok{background:rgba(61,220,151,.12);color:var(--green);border:1px solid rgba(61,220,151,.3)}
+
+pre{
+  background:#080c15;border:1px solid var(--line);border-radius:10px;
+  padding:15px 17px;overflow-x:auto;font-family:var(--mono);font-size:.79rem;
+  line-height:1.65;color:#cfd8e8;margin:10px 0 16px;
+}
+pre .c{color:#5d6b85}
+pre .k{color:var(--purple)}
+pre .s{color:var(--green)}
+pre .n{color:var(--amber)}
+pre .f{color:var(--cyan)}
+
+.note{
+  border-left:3px solid var(--cyan);background:rgba(62,207,255,.05);
+  padding:12px 16px;border-radius:0 9px 9px 0;margin:14px 0;font-size:.9rem;color:#bccbe0;
+}
+.warn{border-left-color:var(--amber);background:rgba(255,194,51,.05)}
+.bad{border-left-color:var(--red);background:rgba(255,92,108,.05)}
+.good{border-left-color:var(--green);background:rgba(61,220,151,.05)}
+
+/* ---------- GAMEPAD ---------- */
+.padlayout{display:grid;grid-template-columns:1fr 340px;gap:20px;align-items:start}
+@media(max-width:900px){.padlayout{grid-template-columns:1fr}}
+.padbox{
+  background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:18px;
+}
+.padttl{display:flex;align-items:center;gap:10px;margin-bottom:6px}
+.padttl h3{margin:0;font-size:1.05rem}
+.padttl .port{
+  font-family:var(--mono);font-size:.7rem;background:var(--bg2);
+  border:1px solid var(--line);padding:2px 8px;border-radius:5px;color:var(--amber);
+}
+svg .hot{cursor:pointer;transition:.14s}
+svg .hot:hover .sh{fill:var(--amber);}
+svg .hot:hover .lb{fill:#0b0f19}
+svg .hot.sel .sh{fill:var(--amber)}
+svg .hot.sel .lb{fill:#0b0f19}
+.sh{fill:#243049;stroke:#3a4a6b;stroke-width:1.5}
+.lb{fill:#cbd5e6;font-family:var(--mono);font-size:11px;font-weight:700;text-anchor:middle;dominant-baseline:central;pointer-events:none}
+.body{fill:#182135;stroke:#2c3950;stroke-width:2}
+.det{
+  background:var(--panel);border:1px solid var(--line);border-radius:14px;
+  padding:18px;position:sticky;top:74px;min-height:260px;
+}
+.det .dk{font-family:var(--mono);color:var(--amber);font-size:.8rem;letter-spacing:.06em;text-transform:uppercase}
+.det h4{margin:6px 0 10px;color:var(--txt);font-size:1.1rem}
+.det p{font-size:.88rem;margin-bottom:10px}
+.det .kv{display:flex;gap:9px;font-size:.79rem;padding:6px 0;border-top:1px solid var(--line)}
+.det .kv span:first-child{color:var(--dim);min-width:76px;flex-shrink:0}
+.det .kv span:last-child{color:#cfd8e8;font-family:var(--mono)}
+.det .empty{color:var(--dim);font-size:.88rem;font-style:italic}
+
+/* ---------- STATE MACHINE ---------- */
+.modebar{display:flex;flex-wrap:wrap;gap:8px;margin-bottom:16px}
+.mbtn{
+  background:var(--panel);border:1px solid var(--line);color:var(--dim);
+  padding:9px 16px;border-radius:9px;cursor:pointer;font-family:inherit;
+  font-size:.85rem;font-weight:650;transition:.15s;
+}
+.mbtn:hover{border-color:#3d4d70;color:var(--txt)}
+.mbtn.on{background:var(--amber);color:#0b0f19;border-color:var(--amber)}
+.mout{display:grid;gap:12px;grid-template-columns:repeat(auto-fit,minmax(210px,1fr))}
+.mcell{background:var(--panel2);border:1px solid var(--line);border-radius:11px;padding:15px}
+.mcell .h{font-size:.72rem;text-transform:uppercase;letter-spacing:.1em;color:var(--dim);margin-bottom:7px}
+.mcell .b{font-size:.88rem;color:#d6dfee}
+.mcell .b b{color:var(--amber);font-weight:650}
+
+/* ---------- SHOT CALC ---------- */
+.calc{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:22px}
+input[type=range]{
+  width:100%;-webkit-appearance:none;appearance:none;height:5px;
+  background:var(--line);border-radius:3px;outline:none;margin:16px 0 6px;
+}
+input[type=range]::-webkit-slider-thumb{
+  -webkit-appearance:none;width:19px;height:19px;border-radius:50%;
+  background:var(--amber);cursor:pointer;border:3px solid var(--bg);
+  box-shadow:0 0 0 1px var(--amber);
+}
+input[type=range]::-moz-range-thumb{
+  width:19px;height:19px;border-radius:50%;background:var(--amber);
+  cursor:pointer;border:3px solid var(--bg);
+}
+.rlabels{display:flex;justify-content:space-between;font-size:.72rem;color:var(--dim);font-family:var(--mono)}
+
+/* ---------- ACCORDION ---------- */
+.acc{background:var(--panel);border:1px solid var(--line);border-radius:11px;margin-bottom:10px;overflow:hidden}
+.acch{
+  padding:14px 17px;cursor:pointer;display:flex;align-items:center;gap:12px;
+  transition:.14s;user-select:none;
+}
+.acch:hover{background:var(--panel2)}
+.acch .ttl{flex:1;font-weight:650;font-size:.93rem}
+.acch .arw{color:var(--dim);transition:.22s;font-size:.8rem}
+.acc.open .arw{transform:rotate(90deg)}
+.accb{display:none;padding:0 17px 17px;border-top:1px solid var(--line);padding-top:15px}
+.acc.open .accb{display:block}
+.accb p{font-size:.9rem}
+.fix{border-left:3px solid var(--green);background:rgba(61,220,151,.05);padding:11px 15px;border-radius:0 9px 9px 0;margin-top:12px}
+.fix .fl{font-size:.7rem;text-transform:uppercase;letter-spacing:.1em;color:var(--green);font-weight:700;margin-bottom:5px}
+.fix p{margin:0;font-size:.87rem}
+
+/* ---------- FLOW ---------- */
+.flow{display:flex;flex-wrap:wrap;align-items:center;gap:9px;margin:18px 0}
+.fnode{
+  background:var(--panel2);border:1px solid var(--line);border-radius:10px;
+  padding:11px 15px;font-size:.83rem;font-weight:600;
+}
+.fnode small{display:block;color:var(--dim);font-weight:400;font-size:.72rem;margin-top:2px}
+.farr{color:var(--amber);font-size:1.15rem;font-weight:700}
+.fnode.hi{border-color:var(--amber);background:rgba(255,194,51,.07)}
+
+footer{
+  border-top:1px solid var(--line);padding:30px 24px;text-align:center;
+  color:var(--dim);font-size:.82rem;
+}
+</style>
+</head>
+<body>
+
+<header>
+  <div class="hwrap">
+    <div class="eyebrow">FRC 6702 · Stingbots · Temporada 2026 REBUILT</div>
+    <h1>Tequila 4.0 — <span>Manual Técnico de Software</span></h1>
+    <p class="sub">Cómo funciona el robot de punta a punta: arquitectura AdvantageKit, los cinco subsistemas, la máquina de estados de modos de combate, el mapeo completo de los dos controles y una auditoría del código actual.</p>
+    <div class="chips">
+      <span class="chip"><b>Swerve</b> SDS Mk5n · Kraken X60/X44</span>
+      <span class="chip"><b>10</b> motores de mecanismo</span>
+      <span class="chip"><b>Híbrido</b> Turret 360° + Shooter fijo</span>
+      <span class="chip"><b>AdvantageKit</b> + PathPlanner + Limelight</span>
+    </div>
+  </div>
+</header>
+
+<nav>
+  <div class="navwrap" id="nav"></div>
+</nav>
+
+<main>
+
+<!-- ══════════════ 1 · RESUMEN ══════════════ -->
+<section class="page on" id="p-resumen">
+  <h2><span class="num">01</span>Panorama general</h2>
+  <p class="lead">Tequila 4.0 es una máquina de ciclado puro de FUEL: swerve rápido, intake sobre bumper, indexer que reparte a dos cabezas de disparo, y odometría fusionada con visión que apunta sola. No tiene climber — se omitió deliberadamente porque el cálculo de ciclos dio más puntos disparando.</p>
+
+  <div class="grid g4" style="margin-bottom:26px">
+    <div class="stat"><div class="v">5</div><div class="k">Subsistemas</div></div>
+    <div class="stat"><div class="v">18</div><div class="k">Motores Kraken</div></div>
+    <div class="stat"><div class="v">31</div><div class="k">CAN IDs usados</div></div>
+    <div class="stat"><div class="v">10</div><div class="k">Autónomos</div></div>
+  </div>
+
+  <h3>El ciclo completo, paso a paso</h3>
+  <div class="flow">
+    <div class="fnode">Intake<small>rack &amp; pinion sale del bumper</small></div><span class="farr">→</span>
+    <div class="fnode">Indexer<small>5 rodillos, "Y-Valve"</small></div><span class="farr">→</span>
+    <div class="fnode">Feeder<small>pre-acelera en rampa</small></div><span class="farr">→</span>
+    <div class="fnode hi">Turret 360°<small>+ Shooter fijo</small></div><span class="farr">→</span>
+    <div class="fnode">HUB</div>
+  </div>
+
+  <p>El punto clave del diseño es el <b>Y-Valve</b>: el mismo par de ejes coaxiales, según el sentido de giro de cada motor, manda todo el FUEL a la torreta, todo al shooter fijo, o lo reparte entre ambos. En software eso son tres métodos de <code>Indexer</code> (<code>indexTurret()</code>, <code>indexShooter()</code>, <code>indexBoth()</code>) que sólo cambian el signo de dos velocidades.</p>
+
+  <h3>Cómo apunta el robot solo ("Target Orbiting")</h3>
+  <p>El operador no apunta nada. Mantiene <code>X</code> en el control de mecanismos y el código hace la cadena completa cada 20 ms:</p>
+  <ol>
+    <li>El <code>SwerveDrivePoseEstimator</code> entrega la pose del robot (encoders Kraken + Pigeon 2.0 + AprilTags del Limelight).</li>
+    <li>Se elige el objetivo según la alianza y el modo: <code>blueHub (4.625, 4.035)</code>, <code>redHub (11.917, 4.035)</code>, o una pared de feeder en X=2 / X=14.</li>
+    <li><code>Drive.getDistanceToTargetMeters()</code> da la distancia; <code>Turret.computeTurretAngleRad()</code> da el ángulo de torreta ya normalizado y recortado a sus soft limits.</li>
+    <li>Dos <code>InterpolatingDoubleTreeMap</code> convierten esa distancia en ángulo de hood y RPS de flywheel.</li>
+    <li>El TalonFX ejecuta <code>VelocityVoltage</code> (flywheel), <code>PositionVoltage</code> (hood) y <code>MotionMagicVoltage</code> (rotación de torreta) en su propio lazo a 1 kHz.</li>
+  </ol>
+
+  <div class="note good">
+    <b>Por qué esto es correcto:</b> el flywheel usa control de velocidad en lazo cerrado con <code>kV</code>, no duty cycle. Cuando la batería cae de 12.6 V a 10.5 V a mitad de match, el Talon sube el voltaje solo y el tiro no cambia. Es la diferencia entre un shooter que funciona en el pit y uno que funciona en la final.
+  </div>
+
+  <h3>Archivos clave</h3>
+  <div class="tblwrap">
+    <table>
+      <thead><tr><th>Archivo</th><th>Qué hace</th></tr></thead>
+      <tbody>
+        <tr><td class="mono">Robot.java</td><td>Ciclo de vida WPILib + arranque del logger de AdvantageKit. Guarda <code>Robot.mode</code> (BOMBER/STRIKER).</td></tr>
+        <tr><td class="mono">RobotContainer.java</td><td>Instancia subsistemas según REAL/SIM/REPLAY, registra los <code>NamedCommands</code> de PathPlanner y define TODOS los bindings.</td></tr>
+        <tr><td class="mono">constants/*.java</td><td>CAN IDs, gear ratios, ganancias PID, límites de software y los mapas de tiro.</td></tr>
+        <tr><td class="mono">commands/*Commands.java</td><td>Comandos por defecto (fábricas estáticas). Aquí vive la lógica de modos.</td></tr>
+        <tr><td class="mono">subsystems/&lt;x&gt;/X.java</td><td>Capa lógica del subsistema — sólo llama a su interfaz IO.</td></tr>
+        <tr><td class="mono">subsystems/&lt;x&gt;/XIO*.java</td><td>Capa hardware: <code>TalonFX</code> real, <code>Sim</code> física, o interfaz vacía para REPLAY.</td></tr>
+        <tr><td class="mono">Timer.java</td><td>Subsistema mínimo que loguea la fase del match (Shift 1..4 / Endgame) para AdvantageScope.</td></tr>
+      </tbody>
+    </table>
+  </div>
+</section>
+
+<!-- ══════════════ 2 · REBUILT ══════════════ -->
+<section class="page" id="p-reto">
+  <h2><span class="num">02</span>El reto REBUILT y por qué el código está así</h2>
+  <p class="lead">Casi cada decisión de software se explica por una regla del juego. Esta sección conecta las dos cosas.</p>
+
+  <div class="grid g2">
+    <div class="card">
+      <h4>Estructura del match</h4>
+      <p>20 s de AUTO + 2:20 de teleop. El teleop se parte en un <b>Transition Shift</b> de 10 s y luego <b>cuatro Alliance Shifts de 25 s</b>. Al final todos los HUB se activan.</p>
+      <p>La alianza que anotó más FUEL en AUTO determina qué HUB queda inactivo en el Shift 1. El FMS lo comunica al inicio del teleop y las luces del HUB lo indican.</p>
+    </div>
+    <div class="card">
+      <h4>Cómo lo refleja el código</h4>
+      <p><code>Timer.java</code> reproduce exactamente esa partición sobre <code>DriverStation.getMatchTime()</code> y publica un string de fase en el log:</p>
+      <pre><span class="k">if</span> (t > <span class="n">130</span>) <span class="c">// Transition &amp; Shift start</span>
+<span class="k">else if</span> (t > <span class="n">105</span>) <span class="c">// Alliance Shift 1</span>
+<span class="k">else if</span> (t > <span class="n">80</span>)  <span class="c">// Alliance Shift 2</span>
+<span class="k">else if</span> (t > <span class="n">55</span>)  <span class="c">// Alliance Shift 3</span>
+<span class="k">else if</span> (t > <span class="n">30</span>)  <span class="c">// Alliance Shift 4</span>
+<span class="k">else</span>              <span class="c">// Endgame</span></pre>
+      <p style="font-size:.85rem;color:var(--dim)">140 s − 10 s de transición − 4×25 s = 30 s de endgame. Los umbrales cuadran.</p>
+    </div>
+  </div>
+
+  <h3>Regla → decisión de diseño</h3>
+  <div class="tblwrap">
+    <table>
+      <thead><tr><th>Regla / realidad del juego</th><th>Consecuencia en el robot</th></tr></thead>
+      <tbody>
+        <tr><td>El FUEL es una pelota de espuma de 5.91" — se acumula, no se manipula pieza a pieza.</td><td>Intake de rodillos de alta velocidad + almacenamiento interno, sin sensores de pieza individual. Nada de posicionamiento fino.</td></tr>
+        <tr><td>Tu HUB se apaga durante shifts alternos.</td><td>Se necesita un modo de <b>pase</b> (FEEDER / DS_TRACKER) para mover FUEL al lado propio mientras tu HUB está inactivo, y un modo de <b>anotación</b> (ORBIT / HUB_TRACKER).</td></tr>
+        <tr><td>No hay zonas seguras; el campo exige movimiento constante.</td><td>Swerve con ratio agresivo y disparo <i>en movimiento</i>: por eso el aiming es por odometría y no por <code>tx</code> de la Limelight.</td></tr>
+        <tr><td>El throughput manda; colgarse en Tower cuesta tiempo.</td><td><b>Sin climber.</b> El binder documenta la omisión: 2–3 ciclos extra de FUEL rinden más que el hang L3.</td></tr>
+        <tr><td>El HUB está en una posición fija y conocida del campo.</td><td>El objetivo se codifica como constante (<code>blueHub</code>/<code>redHub</code>), no se busca con visión. La visión sólo corrige la pose.</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <div class="note">
+    <b>Nota sobre el binder:</b> el Tech Binder describe tres modos de manejo estilo F1 — <b>B</b>omber (70% velocidad), <b>S</b>triker (80%) e <b>I</b>nterceptor (100%). El código actual sólo implementa <code>RobotMode.BOMBER</code> y <code>RobotMode.STRIKER</code>, y <b>ninguno de los dos escala la velocidad del drivetrain</b>. Ver el hallazgo #4 en la sección de auditoría.
+  </div>
+</section>
+
+<!-- ══════════════ 3 · ARQUITECTURA ══════════════ -->
+<section class="page" id="p-arq">
+  <h2><span class="num">03</span>Arquitectura del software</h2>
+  <p class="lead">El proyecto sigue el patrón AdvantageKit de Littleton Robotics: cada subsistema tiene una capa lógica pura y una capa de hardware intercambiable.</p>
+
+  <h3>El patrón de tres capas</h3>
+  <div class="flow">
+    <div class="fnode">Command<small>qué queremos que pase</small></div><span class="farr">→</span>
+    <div class="fnode">Subsystem<small>lógica, unidades, mapas</small></div><span class="farr">→</span>
+    <div class="fnode hi">IO Interface<small>contrato de hardware</small></div><span class="farr">→</span>
+    <div class="fnode">TalonFX / Sim / vacío</div>
+  </div>
+
+  <p>Cada <code>XIO</code> define una clase <code>XIOInputs</code> con todo lo que se lee del hardware. En <code>periodic()</code> el subsistema hace <code>io.updateInputs(inputs)</code> y luego <code>Logger.processInputs("Nombre", inputs)</code>. Eso graba las entradas al log, y en modo REPLAY AdvantageKit las <b>reinyecta</b> en vez de leerlas del hardware: puedes correr el código de un match real en tu laptop y depurarlo línea a línea.</p>
+
+  <div class="grid g3">
+    <div class="card"><h4>REAL</h4><p style="font-size:.87rem">Instancia <code>*IOTalonFX</code> + <code>GyroIOPigeon2</code> + <code>VisionIOLimelight</code>. Escribe log a USB (<code>/U/logs</code>) y publica a NT4.</p></div>
+    <div class="card"><h4>SIM</h4><p style="font-size:.87rem">Instancia <code>*IOSim</code> + <code>VisionIOPhotonVisionSim</code>. Sólo publica a NT4 para ver en AdvantageScope.</p></div>
+    <div class="card"><h4>REPLAY</h4><p style="font-size:.87rem">IO vacíos; lee un <code>.wpilog</code> y lo re-procesa a máxima velocidad, generando un log <code>_sim</code>.</p></div>
+  </div>
+
+  <h3>Mapa de CAN bus</h3>
+  <div class="tblwrap">
+    <table>
+      <thead><tr><th>ID</th><th>Dispositivo</th><th>Subsistema</th><th>Control</th><th>Ratio (código)</th></tr></thead>
+      <tbody>
+        <tr><td class="mono">0</td><td>Pigeon 2.0</td><td>Drive</td><td>—</td><td>—</td></tr>
+        <tr><td class="mono">1 / 2 / 3</td><td>X60 drive / X44 steer / CANcoder</td><td>Drive · Front Left</td><td>Velocity + Position</td><td>5.273 / 26.09</td></tr>
+        <tr><td class="mono">4 / 5 / 6</td><td>X60 / X44 / CANcoder</td><td>Drive · Front Right</td><td>Velocity + Position</td><td>5.273 / 26.09</td></tr>
+        <tr><td class="mono">7 / 8 / 9</td><td>X60 / X44 / CANcoder</td><td>Drive · Back Left</td><td>Velocity + Position</td><td>5.273 / 26.09</td></tr>
+        <tr><td class="mono">10 / 11 / 12</td><td>X60 / X44 / CANcoder</td><td>Drive · Back Right</td><td>Velocity + Position</td><td>5.273 / 26.09</td></tr>
+        <tr><td class="mono">20</td><td>Kraken X44</td><td>Intake · extensor</td><td>PositionVoltage + soft limits</td><td><span style="color:var(--red)">8.0</span> (¿9.0?)</td></tr>
+        <tr><td class="mono">21</td><td>Kraken X44</td><td>Intake · rollers</td><td>Duty cycle</td><td><span style="color:var(--red)">1.0</span> (¿1.667?)</td></tr>
+        <tr><td class="mono">22</td><td>Kraken X44</td><td>Indexer · rollers</td><td>Duty cycle</td><td><span style="color:var(--red)">3.0</span> (¿3.333?)</td></tr>
+        <tr><td class="mono">23</td><td>Kraken X44</td><td>Indexer · shooterWheels</td><td>Duty cycle</td><td>4.0</td></tr>
+        <tr><td class="mono">24</td><td>Kraken X44</td><td>Indexer · turretWheels (invertido)</td><td>Duty cycle</td><td>4.0</td></tr>
+        <tr><td class="mono">25</td><td>Kraken X44</td><td>Feeder (invertido)</td><td>Duty cycle</td><td><span style="color:var(--red)">4.0</span> (¿4.167?)</td></tr>
+        <tr><td class="mono">26</td><td>Kraken X44</td><td>Turret · rotación</td><td>MotionMagicVoltage + soft limits</td><td>34.17</td></tr>
+        <tr><td class="mono">27</td><td>Kraken X44</td><td>Turret · hood</td><td>PositionVoltage</td><td>136.8</td></tr>
+        <tr><td class="mono">28</td><td>Kraken X60</td><td>Turret · flywheel</td><td>VelocityVoltage + FOC</td><td>1.0</td></tr>
+        <tr><td class="mono">29</td><td>Kraken X44</td><td>Shooter fijo · hood</td><td>PositionVoltage</td><td>136.8</td></tr>
+        <tr><td class="mono">30</td><td>Kraken X60</td><td>Shooter fijo · flywheel</td><td>VelocityVoltage + FOC</td><td>1.0</td></tr>
+      </tbody>
+    </table>
+  </div>
+  <p style="font-size:.84rem;color:var(--dim)">Los ratios en rojo son resultado de <b>división entera</b> en Java (<code>40/12 == 3</code>, no <code>3.333</code>). Ver hallazgo #1.</p>
+
+  <h3>Gestión del bus CAN</h3>
+  <p>Cada IO usa dos frecuencias de refresco: <code>highPriorityFrequencyHz = 50 Hz</code> para lo que se controla (velocidad del flywheel, posición del hood y del extensor) y <code>lowPriorityFrequencyHz = 25 Hz</code> para telemetría (voltaje, corriente). Después llama a <code>ParentDevice.optimizeBusUtilizationForAll(...)</code>, que apaga todas las señales que no se pidieron explícitamente. Sin eso, 18 Talons saturarían un bus CAN 2.0.</p>
+
+  <h3>Odometría y visión</h3>
+  <pre><span class="c">// PhoenixOdometryThread muestrea a 250 Hz (CAN FD) o 100 Hz (CAN 2.0)</span>
+poseEstimator.updateWithTime(timestamp, rawGyroRotation, modulePositions);
+
+<span class="c">// Vision inyecta correcciones con desviación estándar variable</span>
+drive.addVisionMeasurement(visionPose, timestamp, stdDevs);</pre>
+  <p>Las desviaciones estándar de visión escalan con la distancia al tag y el número de tags vistos. Con MegaTag2 la desviación angular es <code>POSITIVE_INFINITY</code> a propósito: MegaTag2 usa el giroscopio como verdad para la rotación, así que la visión sólo corrige X e Y. El giroscopio nunca es sobrescrito por la cámara.</p>
+
+  <div class="note warn">
+    En <code>RobotContainer</code>, el objeto <code>Vision</code> se crea con <code>new Vision(...)</code> sin asignarlo a un campo. Funciona porque <code>SubsystemBase</code> se auto-registra en el <code>CommandScheduler</code>, pero no puedes llamar a <code>getTargetX()</code> desde ningún lado. Además, la rama REPLAY pasa <b>dos</b> <code>VisionIO</code> mientras REAL y SIM pasan <b>uno</b> — los índices de cámara no coinciden entre modos y el replay no será fiel.
+  </div>
+</section>
+
+<!-- ══════════════ 4 · SUBSISTEMAS ══════════════ -->
+<section class="page" id="p-sub">
+  <h2><span class="num">04</span>Los cinco subsistemas</h2>
+  <p class="lead">Haz clic en cada subsistema para ver su hardware, su API pública y sus constantes.</p>
+
+  <div class="modebar" id="subbar"></div>
+  <div id="subout"></div>
+</section>
+
+<!-- ══════════════ 5 · ESTADOS ══════════════ -->
+<section class="page" id="p-estado">
+  <h2><span class="num">05</span>Máquina de estados de combate</h2>
+  <p class="lead">Tres enums estáticos determinan todo el comportamiento. Cambiarlos es lo único que hacen cuatro de los botones del piloto.</p>
+
+  <div class="grid g3" style="margin-bottom:22px">
+    <div class="card">
+      <h4>Robot.mode</h4>
+      <p style="font-size:.86rem"><code>BOMBER</code> — la torreta se queda en 0° y el <b>shooter fijo</b> es el que dispara. Volumen alto, apuntas con el chasis.</p>
+      <p style="font-size:.86rem"><code>STRIKER</code> — la torreta rastrea el objetivo y el shooter fijo <b>se apaga</b>. Un solo cañón, pero apunta solo mientras manejas libre.</p>
+    </div>
+    <div class="card">
+      <h4>Drive.mode</h4>
+      <p style="font-size:.86rem"><code>NORMAL</code> — rotación manual con el stick derecho.</p>
+      <p style="font-size:.86rem"><code>ORBIT</code> — PID de heading que mantiene la <b>parte trasera</b> del robot apuntando al HUB (+180° porque los cañones miran atrás). Puedes trasladarte libre alrededor del hub.</p>
+      <p style="font-size:.86rem"><code>FEEDER</code> — PID que fija el heading a 0° (azul) / 180° (rojo) para pasar FUEL a lo largo del campo.</p>
+    </div>
+    <div class="card">
+      <h4>Turret.mode</h4>
+      <p style="font-size:.86rem"><code>NORMAL</code> — torreta a 0°, hood en reposo.</p>
+      <p style="font-size:.86rem"><code>HUB_TRACKER</code> — objetivo = hub de tu alianza.</p>
+      <p style="font-size:.86rem"><code>DS_TRACKER</code> — objetivo = pared de feeder (X = 2 m azul / 14 m rojo, a tu misma Y).</p>
+    </div>
+  </div>
+
+  <h3>Simulador de estados</h3>
+  <p style="font-size:.9rem;color:var(--dim);margin-bottom:14px">Elige una combinación y mira qué hace cada subsistema mientras mantienes <code>X</code> en el control de mecanismos.</p>
+  <div class="card">
+    <div style="font-size:.75rem;text-transform:uppercase;letter-spacing:.1em;color:var(--dim);margin-bottom:8px">Robot.mode</div>
+    <div class="modebar" id="rmbar"></div>
+    <div style="font-size:.75rem;text-transform:uppercase;letter-spacing:.1em;color:var(--dim);margin-bottom:8px">Drive.mode</div>
+    <div class="modebar" id="dmbar"></div>
+    <div style="font-size:.75rem;text-transform:uppercase;letter-spacing:.1em;color:var(--dim);margin-bottom:8px">Turret.mode</div>
+    <div class="modebar" id="tmbar"></div>
+    <hr style="margin:18px 0">
+    <div class="mout" id="stateout"></div>
+  </div>
+
+  <h3>Transiciones reales del código</h3>
+  <div class="tblwrap">
+    <table>
+      <thead><tr><th>Botón (piloto)</th><th>Efecto exacto</th></tr></thead>
+      <tbody>
+        <tr><td class="mono">X</td><td><code>Drive.mode</code> alterna ORBIT ↔ NORMAL · fuerza <code>Robot.mode = BOMBER</code> y <code>Turret.mode = NORMAL</code></td></tr>
+        <tr><td class="mono">Y</td><td><code>Drive.mode</code> alterna FEEDER ↔ NORMAL · fuerza <code>BOMBER</code> y <code>Turret.mode = NORMAL</code></td></tr>
+        <tr><td class="mono">Start</td><td><code>Turret.mode</code> alterna HUB_TRACKER ↔ NORMAL · <code>Robot.mode</code> = STRIKER / BOMBER · fuerza <code>Drive.mode = NORMAL</code></td></tr>
+        <tr><td class="mono">Back</td><td><code>Turret.mode</code> alterna DS_TRACKER ↔ NORMAL · <code>Robot.mode</code> = STRIKER / BOMBER · fuerza <code>Drive.mode = NORMAL</code></td></tr>
+      </tbody>
+    </table>
+  </div>
+  <p style="font-size:.86rem;color:var(--dim)">Los cuatro botones son mutuamente excluyentes por diseño: entrar a un modo de torreta apaga los modos de drive y viceversa. Cada transición hace <code>Logger.recordOutput</code> de los tres enums, así que en AdvantageScope puedes ver exactamente en qué modo estabas en cada frame del match.</p>
+
+  <div class="note bad">
+    <b>Trampa conocida:</b> si el piloto presiona <code>X</code> (entra a ORBIT) y después <code>Start</code>, el código pone <code>Drive.mode = NORMAL</code> — el robot deja de orbitar de golpe. Es correcto según la lógica escrita, pero en la práctica el piloto suele no esperarlo. Considérenlo al entrenar drivers.
+  </div>
+</section>
+
+<!-- ══════════════ 6 · CONTROLES ══════════════ -->
+<section class="page" id="p-ctrl">
+  <h2><span class="num">06</span>Mapeo de controles</h2>
+  <p class="lead">Dos controles Xbox. Haz clic en cualquier botón para ver exactamente qué comando dispara.</p>
+
+  <div class="padlayout">
+    <div>
+      <div class="padbox" style="margin-bottom:16px">
+        <div class="padttl"><h3>Piloto — Conducción y modos</h3><span class="port">port 0</span></div>
+        <p style="font-size:.83rem;color:var(--dim);margin-bottom:6px">Todo lo que hace es mover el chasis y cambiar el estado global.</p>
+        <div id="pad0"></div>
+      </div>
+      <div class="padbox">
+        <div class="padttl"><h3>Mecanismos — Intake, indexer y disparo</h3><span class="port">port 1</span></div>
+        <p style="font-size:.83rem;color:var(--dim);margin-bottom:6px">Todos los bindings son <i>hold</i>: al soltar, el mecanismo se detiene.</p>
+        <div id="pad1"></div>
+      </div>
+    </div>
+    <div class="det" id="ctrldet">
+      <div class="empty">Selecciona un botón en cualquiera de los dos controles para ver su binding completo.</div>
+    </div>
+  </div>
+
+  <h3>Resumen rápido para el driveteam</h3>
+  <div class="grid g2">
+    <div class="card">
+      <h4>Piloto</h4>
+      <ul style="font-size:.88rem;margin-left:16px">
+        <li><b>Stick izq.</b> — traslación field-relative (invertida por alianza)</li>
+        <li><b>Stick der. X</b> — giro, <i>sólo</i> en modo NORMAL</li>
+        <li><b>X</b> — Orbit HUB on/off</li>
+        <li><b>Y</b> — Feeder heading on/off</li>
+        <li><b>B</b> — reset del giroscopio (funciona con el robot deshabilitado)</li>
+        <li><b>Start / Back</b> — torreta rastrea HUB / feeder</li>
+      </ul>
+    </div>
+    <div class="card">
+      <h4>Mecanismos</h4>
+      <ul style="font-size:.88rem;margin-left:16px">
+        <li><b>LT</b> — rodillos de intake</li>
+        <li><b>A / B</b> — extender / retraer intake (closed loop)</li>
+        <li><b>Start / Back</b> — extender / retraer <b>sin soft limits</b> (recalibración)</li>
+        <li><b>LB</b> — alimentar shooter fijo · <b>RB</b> — alimentar torreta · <b>ambos</b> — repartir</li>
+        <li><b>X (hold)</b> — DISPARAR: apunta, calcula y acelera</li>
+        <li><b>RT</b> — expulsar del indexer (desatascar)</li>
+        <li><b>D-Pad ↑</b> — ambos flywheels al 25% (prueba de pit)</li>
+      </ul>
+    </div>
+  </div>
+
+  <div class="note warn">
+    Los sticks se leen negados (<code>-getLeftY()</code>, <code>-getLeftX()</code>, <code>-getRightX()</code>) y la magnitud se eleva al cuadrado antes de escalar, con deadband de <b>0.1</b>. Eso da control fino cerca del centro y velocidad completa al fondo del recorrido.
+  </div>
+</section>
+
+<!-- ══════════════ 7 · DISPARO ══════════════ -->
+<section class="page" id="p-tiro">
+  <h2><span class="num">07</span>Física del disparo y mapas de tiro</h2>
+  <p class="lead">Distancia al objetivo → ángulo de hood + velocidad de flywheel. Dos tablas interpoladas, nada más.</p>
+
+  <div class="calc" style="margin-bottom:24px">
+    <h4 style="margin-top:0">Calculadora de tiro</h4>
+    <p style="font-size:.86rem;color:var(--dim)">Mueve la distancia y mira lo que el código comandaría en ese instante.</p>
+    <input type="range" id="dist" min="0.5" max="6" step="0.1" value="3">
+    <div class="rlabels"><span>0.5 m</span><span>3.25 m</span><span>6.0 m</span></div>
+    <div class="grid g4" style="margin-top:20px">
+      <div class="stat"><div class="v" id="o-dist">3.0 m</div><div class="k">Distancia</div></div>
+      <div class="stat"><div class="v" id="o-hood">11.0°</div><div class="k">Hood offset</div></div>
+      <div class="stat"><div class="v" id="o-rps">39.0</div><div class="k">Flywheel RPS</div></div>
+      <div class="stat"><div class="v" id="o-rpm">2340</div><div class="k">≈ RPM</div></div>
+    </div>
+    <div id="calcnote" class="note" style="margin-bottom:0"></div>
+  </div>
+
+  <div class="grid g2">
+    <div class="card">
+      <h4>kShooterHoodMap · distancia → grados</h4>
+      <table>
+        <thead><tr><th>Distancia</th><th>Offset de hood</th></tr></thead>
+        <tbody>
+          <tr><td class="mono">1.0 m</td><td class="mono">0.0°</td></tr>
+          <tr><td class="mono">4.0 m</td><td class="mono">16.5°</td></tr>
+        </tbody>
+      </table>
+      <p style="font-size:.84rem;color:var(--dim)">Sólo dos puntos: es una recta. Fuera del rango 1–4 m el <code>InterpolatingDoubleTreeMap</code> hace <b>clamp</b>, no extrapola. A 6 m sigue mandando 16.5°.</p>
+    </div>
+    <div class="card">
+      <h4>kShooterFlywheelMap · distancia → RPS</h4>
+      <table>
+        <thead><tr><th>Distancia</th><th>RPS</th><th>≈ RPM</th></tr></thead>
+        <tbody>
+          <tr><td class="mono">1.0 m</td><td class="mono">33.0</td><td class="mono">1980</td></tr>
+          <tr><td class="mono">2.0 m</td><td class="mono">33.0</td><td class="mono">1980</td></tr>
+          <tr><td class="mono">3.0 m</td><td class="mono">39.0</td><td class="mono">2340</td></tr>
+          <tr><td class="mono">4.0 m</td><td class="mono">42.0</td><td class="mono">2520</td></tr>
+          <tr><td class="mono">5.0 m</td><td class="mono">45.0</td><td class="mono">2700</td></tr>
+        </tbody>
+      </table>
+      <p style="font-size:.84rem;color:var(--dim)">El punto de 6.0 m está comentado en el código. Un Kraken X60 llega a ~100 RPS libre, así que hay margen.</p>
+    </div>
+  </div>
+
+  <h3>Detección de "listo para disparar"</h3>
+  <pre><span class="k">public boolean</span> <span class="f">isFlywheelAtSpeed</span>() {
+  <span class="k">double</span> error = Math.abs(inputs.flywheelTargetVelocityRadPerSec
+                          - inputs.flywheelVelocityRadPerSec);
+  <span class="k">return</span> inputs.flywheelTargetVelocityRadPerSec > <span class="n">0</span>
+      &amp;&amp; error &lt; ShooterConstants.flywheelToleranceRadPerSec; <span class="c">// ±2 RPS</span>
+}</pre>
+  <div class="note bad">
+    <b>Este método existe, se loguea… y nunca se usa para nada.</b> <code>IndexerCommands</code> alimenta en cuanto sueltas los bumpers, sin importar si el flywheel llegó a velocidad. Los primeros 1–2 tiros de cada ráfaga salen cortos. Ver hallazgo #5 — es el arreglo de mayor impacto por menor esfuerzo de toda la lista.
+  </div>
+
+  <h3>Cálculo del ángulo de torreta</h3>
+  <pre><span class="k">double</span> worldAngle   = Math.atan2(dy, dx);          <span class="c">// ángulo al objetivo en el campo</span>
+<span class="k">double</span> robotHeading = robotPose.getRotation().getRadians();
+<span class="k">double</span> rawAngle     = worldAngle - robotHeading - <span class="n">Math.PI</span>; <span class="c">// PI = cañones miran atrás</span>
+
+<span class="c">// Normaliza al rango [minRotation, minRotation + 2π) sin wrap de ±180°</span>
+<span class="k">double</span> shifted = rawAngle - minRotationRad;
+shifted = shifted - Math.floor(shifted / (<span class="n">2</span>*Math.PI)) * (<span class="n">2</span>*Math.PI);
+<span class="k">return</span> MathUtil.clamp(shifted + minRotationRad, minRotationRad, maxRotationRad);</pre>
+  <p>El rango de la torreta va de <b>−116.4° a +243.6°</b> — 360° completos, pero desplazados. La normalización manual (en vez de usar <code>Rotation2d</code>) es deliberada: <code>Rotation2d</code> siempre envuelve a ±180° y eso haría que la torreta se diera la vuelta entera para llegar a 200°. El <code>setRotationMotorPosition</code> también divide radianes entre 2π a mano por la misma razón.</p>
+  <div class="note good">Buena decisión de ingeniería, y está bien comentada en el código. No la refactoricen.</div>
+</section>
+
+<!-- ══════════════ 8 · AUTÓNOMO ══════════════ -->
+<section class="page" id="p-auto">
+  <h2><span class="num">08</span>Autónomo</h2>
+  <p class="lead">PathPlanner con <code>AutoBuilder</code>, más siete <code>NamedCommands</code> que exponen los mecanismos a los archivos <code>.auto</code>.</p>
+
+  <h3>NamedCommands registrados</h3>
+  <div class="tblwrap">
+    <table>
+      <thead><tr><th>Nombre</th><th>Qué hace</th><th>Termina solo</th></tr></thead>
+      <tbody>
+        <tr><td class="mono">AimTurret</td><td>Loop continuo: calcula distancia y ángulo al hub de tu alianza, setea flywheel + hood + rotación.</td><td><span class="tag t-med">No</span></td></tr>
+        <tr><td class="mono">ResetTurret</td><td>Hood a reposo, flywheel apagado, torreta a 0°.</td><td><span class="tag t-ok">Sí</span></td></tr>
+        <tr><td class="mono">IndexTurret</td><td>Pulso: intake → indexTurret → 1 s → outtake → 0.25 s, en <code>.repeatedly()</code>.</td><td><span class="tag t-crit">No</span></td></tr>
+        <tr><td class="mono">IndexBoth</td><td>Igual pero repartiendo a ambos cañones.</td><td><span class="tag t-crit">No</span></td></tr>
+        <tr><td class="mono">ExtendIntake</td><td>Extensor a posición extendida + rodillos on.</td><td><span class="tag t-ok">Sí</span></td></tr>
+        <tr><td class="mono">RetractIntake</td><td>Extensor a posición retraída.</td><td><span class="tag t-ok">Sí</span></td></tr>
+        <tr><td class="mono">StartIntakeRollers</td><td>Pulsa los rodillos 0.25 s on / 0.25 s off, <code>.repeatedly()</code>.</td><td><span class="tag t-crit">No</span></td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <div class="note warn">
+    Los tres comandos con <code>.repeatedly()</code> <b>nunca terminan</b>. Funcionan porque los <code>.auto</code> los envuelven en bloques <code>deadline</code> con un <code>wait</code> que los corta. Si alguien los pone en un <code>sequential</code> sin deadline, el autónomo se congela ahí para siempre. Está funcionando por convención, no por diseño.
+  </div>
+
+  <h3>Autónomos en <code>deploy/pathplanner/autos</code></h3>
+  <div class="grid g3">
+    <div class="card" style="padding:14px 16px"><b style="font-size:.9rem">Center</b><p style="font-size:.82rem;margin:4px 0 0;color:var(--dim)">Arranque central</p></div>
+    <div class="card" style="padding:14px 16px"><b style="font-size:.9rem">ShootLeft</b><p style="font-size:.82rem;margin:4px 0 0;color:var(--dim)">Disparo estático izquierda</p></div>
+    <div class="card" style="padding:14px 16px"><b style="font-size:.9rem">TrenchLeft / TrenchRight</b><p style="font-size:.82rem;margin:4px 0 0;color:var(--dim)">Un ciclo desde la trinchera</p></div>
+    <div class="card" style="padding:14px 16px"><b style="font-size:.9rem">TrenchLeftMateo / TrenchRightMateo</b><p style="font-size:.82rem;margin:4px 0 0;color:var(--dim)">Variantes con rutas propias</p></div>
+    <div class="card" style="padding:14px 16px"><b style="font-size:.9rem">Trench*2CicleSanti / *Mateo</b><p style="font-size:.82rem;margin:4px 0 0;color:var(--dim)">Dos ciclos completos — los más ambiciosos</p></div>
+    <div class="card" style="padding:14px 16px"><b style="font-size:.9rem">+ 6 rutinas SysId</b><p style="font-size:.82rem;margin:4px 0 0;color:var(--dim)">Caracterización, no para match</p></div>
+  </div>
+
+  <h3>Anatomía de un auto de dos ciclos</h3>
+  <p style="font-size:.9rem">Tomando <code>TrenchLeft2CicleSantiAut</code> como ejemplo, el patrón se repite dos veces:</p>
+  <div class="flow">
+    <div class="fnode">deadline<small>path + Extend + Rollers</small></div><span class="farr">→</span>
+    <div class="fnode">StopIntakeRollers</div><span class="farr">→</span>
+    <div class="fnode">path de vuelta</div><span class="farr">→</span>
+    <div class="fnode hi">deadline 5 s<small>AimTurret ∥ IndexTurret ∥ Retract</small></div><span class="farr">→</span>
+    <div class="fnode">ResetTurret</div>
+  </div>
+  <p style="font-size:.86rem;color:var(--dim)">Dentro del bloque de disparo hay tres ramas paralelas con offsets de tiempo: apuntar arranca en t=0, indexar en t=1 s (da tiempo a que el flywheel suba) y retraer el intake en t=3 s. Toda la coreografía es por <b>tiempo</b>, no por estado — por eso el hallazgo #5 (gatear con <code>isFlywheelAtSpeed()</code>) mejoraría también el autónomo.</p>
+
+  <h3>Caracterización disponible en el selector</h3>
+  <ul style="font-size:.89rem">
+    <li><b>Drive Wheel Radius Characterization</b> — gira en el lugar y calcula el radio real de la rueda comparando delta de giroscopio contra delta de encoders. Corre esto después de cambiar ruedas.</li>
+    <li><b>Drive Simple FF Characterization</b> — rampa de voltaje y regresión lineal para <code>kS</code> y <code>kV</code>. Imprime los resultados en la consola de la RIO.</li>
+    <li><b>SysId Quasistatic / Dynamic × Forward / Reverse</b> — genera logs para la herramienta SysId de WPILib.</li>
+  </ul>
+</section>
+
+<!-- ══════════════ 9 · TELEMETRÍA ══════════════ -->
+<section class="page" id="p-tele">
+  <h2><span class="num">09</span>Telemetría: AdvantageScope y dashboards</h2>
+  <p class="lead">Qué está publicando el robot y dónde mirarlo.</p>
+
+  <h3>Claves principales del log</h3>
+  <div class="tblwrap">
+    <table>
+      <thead><tr><th>Clave</th><th>Contenido</th><th>Vista de AdvantageScope</th></tr></thead>
+      <tbody>
+        <tr><td class="mono">Odometry/Robot</td><td><code>Pose2d</code> del pose estimator</td><td>2D Field / 3D Field</td></tr>
+        <tr><td class="mono">SwerveStates/Setpoints</td><td>Setpoints de los 4 módulos</td><td>Swerve</td></tr>
+        <tr><td class="mono">SwerveStates/SetpointsOptimized</td><td>Después de optimizar el ángulo</td><td>Swerve</td></tr>
+        <tr><td class="mono">SwerveChassisSpeeds/Setpoints</td><td><code>ChassisSpeeds</code> discretizados</td><td>Line Graph</td></tr>
+        <tr><td class="mono">Mechanism/Turret</td><td><code>Pose3d</code> en (−0.165, −0.17, −0.21)</td><td>3D Field · componente articulado</td></tr>
+        <tr><td class="mono">Mechanism/Intake</td><td><code>Pose3d</code> con extensión proyectada a 14°</td><td>3D Field · componente articulado</td></tr>
+        <tr><td class="mono">Shooter/FlywheelVelocityErrorRadPerSec</td><td>target − actual</td><td>Line Graph <span class="tag t-ok">para tunear kV/kP</span></td></tr>
+        <tr><td class="mono">Shooter/FlywheelAtSpeed</td><td>boolean de tolerancia</td><td>Line Graph / Table</td></tr>
+        <tr><td class="mono">Shooter/FlywheelTargetRPS</td><td>Salida del shot map</td><td>Line Graph</td></tr>
+        <tr><td class="mono">RobotMode · DriveMode · TurretMode</td><td>Enums de estado</td><td>Table / Console</td></tr>
+        <tr><td class="mono">Timer/phase</td><td>"Alliance Shift 2", "Endgame"…</td><td>Table — correlaciona con el video</td></tr>
+        <tr><td class="mono">Vision/Camera0/*</td><td>Poses aceptadas y rechazadas, tags vistos</td><td>3D Field</td></tr>
+        <tr><td class="mono">Intake/* · Indexer/* · Turret/*</td><td>Inputs crudos de cada IO</td><td>Line Graph</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <div class="note bad">
+    <b>Colisión de claves:</b> tanto <code>Shooter</code> como <code>Turret</code> (que hereda de <code>Shooter</code>) llaman <code>Logger.processInputs("Shooter", inputs)</code>. Las dos escriben a la misma tabla y una pisa a la otra en cada ciclo. La tabla <code>TurretShooter</code> existe pero <b>sólo</b> se llena desde <code>Turret.periodic()</code> con los inputs del <code>TurretIO</code>. Ver hallazgo #2 — hoy no puedes distinguir en el log qué cañón hizo qué.
+  </div>
+
+  <h3>Flujo de datos por modo</h3>
+  <div class="grid g3">
+    <div class="card"><h4>En el robot</h4><p style="font-size:.86rem"><code>WPILOGWriter</code> → USB en <code>/U/logs</code><br><code>NT4Publisher</code> → live en la red</p><p style="font-size:.82rem;color:var(--dim)">Si no hay USB montado, el log se pierde. Verifiquen la memoria antes de cada evento.</p></div>
+    <div class="card"><h4>Live durante el match</h4><p style="font-size:.86rem">AdvantageScope conectado por NT4 a <code>10.67.02.2</code> o <code>roborio-6702-frc.local</code>.</p></div>
+    <div class="card"><h4>Post-match</h4><p style="font-size:.86rem">Abrir el <code>.wpilog</code> en AdvantageScope, o cambiar <code>currentMode</code> a <code>REPLAY</code> y re-ejecutar la lógica con datos reales.</p></div>
+  </div>
+
+  <h3>Shuffleboard / Elastic</h3>
+  <p><code>Drive.periodic()</code> publica un <code>Field2d</code> bajo la clave <code>"Field"</code> vía <code>SmartDashboard.putData()</code>, y el selector de autónomo aparece como <code>"Auto Choices"</code> gracias a <code>LoggedDashboardChooser</code>. Los <code>Alert</code> de giroscopio y cámaras desconectadas también salen en el dashboard.</p>
+  <div class="note warn">
+    Publicar <code>SmartDashboard.putData("Field", field2d)</code> <b>dentro de</b> <code>periodic()</code> re-registra el sendable 50 veces por segundo. Muévanlo al constructor de <code>Drive</code> y dejen sólo <code>field2d.setRobotPose(getPose())</code> en el periodic.
+  </div>
+
+  <h3>Qué mirar cuando algo falla</h3>
+  <ul style="font-size:.89rem">
+    <li><b>Tiros inconsistentes</b> → <code>Shooter/FlywheelVelocityErrorRadPerSec</code>. Si el error no baja a cero antes de alimentar, es el hallazgo #5.</li>
+    <li><b>El robot no llega donde debería en auto</b> → <code>Odometry/Robot</code> contra la trayectoria de PathPlanner en 2D Field.</li>
+    <li><b>La torreta apunta mal</b> → superpón <code>Odometry/Robot</code> y <code>Mechanism/Turret</code> en 3D Field; si la pose está bien, el problema es el <code>turretZeroOffsetRad</code> o el cero mecánico.</li>
+    <li><b>Brownouts</b> → corrientes <code>*CurrentAmps</code> de los cuatro drive motors + los dos flywheels en la misma gráfica.</li>
+  </ul>
+</section>
+
+<!-- ══════════════ 10 · AUDITORÍA ══════════════ -->
+<section class="page" id="p-audit">
+  <h2><span class="num">10</span>Auditoría del código</h2>
+  <p class="lead">Doce hallazgos encontrados leyendo el repo, ordenados por impacto en el desempeño en cancha. Cada uno incluye el arreglo concreto.</p>
+
+  <div class="grid g4" style="margin-bottom:26px">
+    <div class="stat"><div class="v" style="color:var(--red)">4</div><div class="k">Críticos</div></div>
+    <div class="stat"><div class="v" style="color:var(--amber)">5</div><div class="k">Medios</div></div>
+    <div class="stat"><div class="v" style="color:var(--cyan)">3</div><div class="k">Menores</div></div>
+    <div class="stat"><div class="v" style="color:var(--green)">2</div><div class="k">Cosas bien hechas</div></div>
+  </div>
+
+  <div id="findings"></div>
+
+  <h3>Lo que está muy bien hecho</h3>
+  <div class="grid g2">
+    <div class="card" style="border-color:rgba(61,220,151,.3)">
+      <h4 style="color:var(--green)">Control de velocidad en lazo cerrado</h4>
+      <p style="font-size:.88rem">Migrar de duty cycle a <code>VelocityVoltage</code> con FOC fue la decisión de software más valiosa de la temporada. Los comentarios que explican cómo tunear <code>kV</code> antes que <code>kP</code> son exactamente el orden correcto, y dejar <code>setFlywheelSpeed()</code> marcado <code>@Deprecated</code> en vez de borrarlo evita que alguien lo reintroduzca sin darse cuenta.</p>
+    </div>
+    <div class="card" style="border-color:rgba(61,220,151,.3)">
+      <h4 style="color:var(--green)">Normalización del ángulo de torreta</h4>
+      <p style="font-size:.88rem">Evitar <code>Rotation2d</code> para el rango de 360° desplazado, y hacer el módulo a mano, es la solución correcta a un problema que muerde a muchos equipos. Igual que gestionar frecuencias de señal y llamar <code>optimizeBusUtilizationForAll</code> — con 18 Talons no es opcional.</p>
+    </div>
+  </div>
+
+  <h3>Orden sugerido de trabajo</h3>
+  <ol style="font-size:.9rem">
+    <li><b>Antes del próximo evento:</b> hallazgos #1 (ratios enteros), #3 (kSpeedAt12Volts), #6 (escala de omega). Son cambios de una línea cada uno con impacto inmediato en cómo se siente el robot.</li>
+    <li><b>Primera práctica disponible:</b> #5 (gatear el feeder con <code>isFlywheelAtSpeed()</code>). Requiere probar, pero es la mejora más grande de precisión de tiro.</li>
+    <li><b>Cuando haya tiempo de banco:</b> #2 (doble instancia de shooter en la torreta) y #4 (modos del binder). Son refactors, no parches.</li>
+    <li><b>Limpieza:</b> #7 a #12 en cualquier momento.</li>
+  </ol>
+</section>
+
+</main>
+
+<footer>
+  FRC 6702 · Stingbots · <b>Tequila 4.0</b> — Manual técnico generado a partir del código fuente en <span class="mono">RebuiltDenver/</span> y del Tech Binder 2026.<br>
+  <span style="opacity:.6">"Science fiction is a kind of archaeology of the future" — Clifton Fadiman</span>
+</footer>
+
+<script>
+/* ═══════════ NAV ═══════════ */
+const PAGES=[
+ ['resumen','Resumen'],['reto','Reto REBUILT'],['arq','Arquitectura'],['sub','Subsistemas'],
+ ['estado','Máquina de estados'],['ctrl','Controles'],['tiro','Disparo'],['auto','Autónomo'],
+ ['tele','Telemetría'],['audit','Auditoría']
+];
+const nav=document.getElementById('nav');
+PAGES.forEach(([id,label],i)=>{
+  const b=document.createElement('button');
+  b.className='tab'+(i===0?' on':''); b.textContent=label;
+  b.onclick=()=>{
+    document.querySelectorAll('.tab').forEach(t=>t.classList.remove('on'));
+    document.querySelectorAll('.page').forEach(p=>p.classList.remove('on'));
+    b.classList.add('on');
+    document.getElementById('p-'+id).classList.add('on');
+    window.scrollTo({top:0,behavior:'smooth'});
+  };
+  nav.appendChild(b);
+});
+
+/* ═══════════ SUBSISTEMAS ═══════════ */
+const SUBS=[
+{id:'drive',name:'Drivetrain',hw:[
+  ['Módulos','4 × SDS Mk5n, ratio R3'],
+  ['Propulsión','Kraken X60 · gear 5.273:1 · rueda 2" radio'],
+  ['Dirección','Kraken X44 · gear 26.09:1 · CANcoder fusionado'],
+  ['IMU','Pigeon 2.0 (CAN ID 0)'],
+  ['Track width','27.5" × 27.5" · radio de base 0.494 m'],
+  ['Odometría','250 Hz en CAN FD / 100 Hz en CAN 2.0, hilo dedicado'],
+  ['Masa (PathPlanner)','58.9 kg · MOI 6 · COF 3.0']
+],api:[
+  ['runVelocity(ChassisSpeeds)','Discretiza, aplica cinemática inversa y dessatura'],
+  ['getPose() / getRotation()','Pose fusionada del estimator'],
+  ['setPose(Pose2d)','Reset de odometría (usado por el botón B)'],
+  ['addVisionMeasurement(...)','Consumidor que le pasa Vision'],
+  ['stopWithX()','Módulos en X para resistir empujones'],
+  ['getDistanceToTargetMeters(pose,target)','Estático — lo usan turret y shooter'],
+  ['sysIdQuasistatic/Dynamic','Rutinas de caracterización']
+],notes:'La cinemática y el pose estimator son de WPILib, no de la clase SwerveDrivetrain de CTRE — TunerConstants sólo aporta la configuración de los módulos. Eso permite que AdvantageKit registre todo y que el replay sea fiel.'},
+
+{id:'intake',name:'Intake',hw:[
+  ['Tipo','Rack &amp; pinion sobre el bumper, piñón de 0.5" de radio'],
+  ['Extensor','Kraken X44 (ID 20) · 12→54 + 36→18, sincronizado con HTD 9 mm'],
+  ['Rodillos','Kraken X44 (ID 21) · 12:20 · dos rodillos de policarbonato 1.25" con uretano'],
+  ['Control extensor','PositionVoltage · kP=10 · soft limits 2–20.5 rad'],
+  ['Límites de corriente','Rodillos 100 A stator / 30 A supply · Extensor 40 / 20 A'],
+  ['Neutral mode','Rodillos Coast · Extensor Brake']
+],api:[
+  ['intake() / outtake()','Rodillos a ±0.8 duty'],
+  ['setExtended()','Extensor a 20 rad (lazo cerrado)'],
+  ['setExtendedReset()','Extensor a 3.5 rad'],
+  ['extend() / retract()','Lazo abierto a ±0.24 — para recalibrar'],
+  ['setSoftwareLimit(boolean)','Reaplica toda la config activando/desactivando límites'],
+  ['extensorIsAtPosition(target,tol)','Comparación con tolerancia (no se usa)']
+],notes:'La caja del extensor va a ras de piso a propósito para bajar el centro de gravedad y dejar volumen interno para FUEL. En software: los soft limits están escritos a mano en IntakeIOTalonFX (2 y 20.5 rad) y no coinciden con IntakeConstants (3.5 y 20). setSoftwareLimit() reaplica la configuración completa del Talon en pleno ciclo del scheduler, con timeout de 0.25 s — riesgo de loop overrun.'},
+
+{id:'indexer',name:'Indexer + Feeder',hw:[
+  ['Concepto','"Y-Valve": dos ejes hexagonales coaxiales con engranes cónicos y bandas'],
+  ['Rodillos de entrada','Kraken X44 (ID 22) · 40:12'],
+  ['Vía shooter fijo','Kraken X44 (ID 23) · 48:12'],
+  ['Vía torreta','Kraken X44 (ID 24) · 48:12 · invertido'],
+  ['Feeder','Kraken X44 (ID 25) · 50:12 · invertido · rueda compliant 2.25"'],
+  ['Control','Todo lazo abierto (duty cycle)']
+],api:[
+  ['intake()','Rodillos de entrada a 0.4'],
+  ['indexShooter()','shooterWheels +0.25 · turretWheels −0.25 · feeder +1.0'],
+  ['indexTurret()','shooterWheels −0.25 · turretWheels +0.25 · feeder +1.0'],
+  ['indexBoth()','Ambos +0.25 · feeder +1.0'],
+  ['outtake()','Los tres en negativo — desatasque'],
+  ['stopRollers() / stopIndexer()','Paro selectivo']
+],notes:'Toda la "válvula" es puramente el signo de dos velocidades. No hay sensores de pieza: el subsistema no sabe cuánto FUEL lleva. El feeder pre-acelera la pelota en la rampa para reducir la carga sobre las ruedas del shooter, lo que sube el FUEL-por-segundo. Es también la base estructural de la torreta.'},
+
+{id:'shooter',name:'Shooter fijo',hw:[
+  ['Ubicación','Trasera izquierda, ángulo fijo respecto al chasis'],
+  ['Flywheel','Kraken X60 (ID 30) · 1:1 · dos Colson Performa 4"'],
+  ['Backspin','Ruedas Stealth 2" secundarias'],
+  ['Hood','Kraken X44 (ID 29) · 136.8:1 total · kP=100, kD=1.5, kS=0.4'],
+  ['Control flywheel','VelocityVoltage + FOC · kV=0.12, kP=0.10'],
+  ['Tolerancia','±2 RPS (≈120 RPM)'],
+  ['Corriente','80 A stator / 40 A supply'],
+  ['Neutral','Flywheel Coast · Hood Brake']
+],api:[
+  ['setFlywheelVelocity(radPerSec)','Lazo cerrado — usar siempre en match'],
+  ['setFlywheelVelocityForDistance(m)','Consulta el shot map y comanda'],
+  ['setFlywheelOpenLoop(duty)','Sólo pruebas de pit'],
+  ['setHoodForDistance(m) / setHoodPosition(Rotation2d)','Posición del hood'],
+  ['setHoodAtInitialPosition()','Hood a cero'],
+  ['isFlywheelAtSpeed()','Listo para alimentar — NO SE USA'],
+  ['stopFlywheel()','Duty 0 (frena por coast)']
+],notes:'Es el cañón de volumen. Sólo dispara cuando Robot.mode == BOMBER; en STRIKER se apaga por completo. La lógica vive en ShooterCommands.joystickShooterCmd y corre como comando por defecto del subsistema.'},
+
+{id:'turret',name:'Torreta 360°',hw:[
+  ['Ubicación','Trasera derecha, sobre el feeder'],
+  ['Cabeza','Idéntica al shooter fijo — misma refacción sirve para ambos'],
+  ['Rotación','Kraken X44 (ID 26) · 50:12 × 82:10 = 34.17:1'],
+  ['Control rotación','MotionMagicVoltage · cruise 2 rot/s · accel 5 rot/s²'],
+  ['Ganancias','kP=50, kI=0.1, kD=2.0, kS=0.35, kV=4.2'],
+  ['Rango','−116.4° a +243.6° (360° desplazados)'],
+  ['Offset de cero','π rad — los cañones miran hacia atrás']
+],api:[
+  ['rotateToAngle(rad)','Motion Magic al ángulo dado'],
+  ['computeTurretAngleRad(pose,target)','Estático — ángulo normalizado y clampeado'],
+  ['+ toda la API de Shooter','Turret extends Shooter']
+],notes:'Turret extiende Shooter y TurretIOTalonFX extiende ShooterIOTalonFX. Pero en RobotContainer se le pasan DOS IOs con los MISMOS CAN IDs (28 y 27), creando objetos TalonFX duplicados para el mismo hardware. Es el hallazgo #2 y es el problema arquitectónico más profundo del proyecto.'}
+];
+
+const subbar=document.getElementById('subbar'), subout=document.getElementById('subout');
+SUBS.forEach((s,i)=>{
+  const b=document.createElement('button');
+  b.className='mbtn'+(i===0?' on':''); b.textContent=s.name;
+  b.onclick=()=>{document.querySelectorAll('#subbar .mbtn').forEach(x=>x.classList.remove('on'));b.classList.add('on');renderSub(s)};
+  subbar.appendChild(b);
+});
+function renderSub(s){
+  subout.innerHTML=`
+  <div class="grid g2">
+    <div class="card"><h4 style="margin-top:0">Hardware y configuración</h4>
+      <table>${s.hw.map(([k,v])=>`<tr><td style="color:var(--dim);width:38%">${k}</td><td>${v}</td></tr>`).join('')}</table>
+    </div>
+    <div class="card"><h4 style="margin-top:0">API pública</h4>
+      <table>${s.api.map(([k,v])=>`<tr><td class="mono" style="color:var(--cyan);width:46%">${k}</td><td style="font-size:.84rem">${v}</td></tr>`).join('')}</table>
+    </div>
+  </div>
+  <div class="note">${s.notes}</div>`;
+}
+renderSub(SUBS[0]);
+
+/* ═══════════ MÁQUINA DE ESTADOS ═══════════ */
+let RM='BOMBER', DM='NORMAL', TM='NORMAL';
+function bar(el,opts,cur,set){
+  el.innerHTML='';
+  opts.forEach(o=>{
+    const b=document.createElement('button');
+    b.className='mbtn'+(o===cur()?' on':''); b.textContent=o;
+    b.onclick=()=>{set(o);drawState()};
+    el.appendChild(b);
+  });
+}
+function drawState(){
+  bar(document.getElementById('rmbar'),['BOMBER','STRIKER'],()=>RM,v=>RM=v);
+  bar(document.getElementById('dmbar'),['NORMAL','ORBIT','FEEDER'],()=>DM,v=>DM=v);
+  bar(document.getElementById('tmbar'),['NORMAL','HUB_TRACKER','DS_TRACKER'],()=>TM,v=>TM=v);
+
+  let drive, shooter, turret, target;
+
+  if(DM==='ORBIT'){ drive='PID de heading mantiene la <b>trasera</b> apuntando al HUB. Stick derecho ignorado, traslación libre.'; }
+  else if(DM==='FEEDER'){ drive='PID fija el heading a <b>0° (azul) / 180° (rojo)</b>. Stick derecho ignorado.'; }
+  else { drive='Rotación <b>manual</b> con el stick derecho, con deadband y cuadratura.'; }
+
+  if(RM==='BOMBER'){
+    if(DM!=='NORMAL'){
+      target = DM==='ORBIT' ? 'HUB de tu alianza' : 'pared de feeder (X=2 azul / X=14 rojo, misma Y)';
+      shooter=`<b>ACTIVO.</b> Hood y RPS por shot map contra ${target}.`;
+    } else {
+      shooter='<b>ACTIVO.</b> Hood en reposo, flywheel a <b>42 RPS</b> fijos (velocidad por defecto).';
+    }
+  } else {
+    shooter='<b>APAGADO.</b> stopFlywheel() + hood a reposo. En STRIKER sólo dispara la torreta.';
+  }
+
+  if(RM==='BOMBER'){
+    turret='Rotación forzada a <b>0°</b>. Sigue disparando con hood y RPS calculados, pero apuntas con el chasis.';
+    if(DM==='NORMAL'&&TM==='NORMAL') turret='Rotación a <b>0°</b>, hood en reposo, flywheel a 42 RPS por defecto.';
+  } else {
+    const t = TM==='HUB_TRACKER' ? 'el <b>HUB</b> de tu alianza'
+            : TM==='DS_TRACKER' ? 'la <b>pared de feeder</b> (X=2 / X=14, misma Y)'
+            : 'nada — Turret.mode es NORMAL, así que el objetivo es (0,0) y el ángulo será basura';
+    turret=`Rastrea ${t} con Motion Magic, hood y RPS por distancia.`;
+  }
+
+  const warn = (RM==='STRIKER'&&TM==='NORMAL')
+    ? '<div class="note bad" style="margin:0"><b>Estado inalcanzable por los bindings</b> — y por buena razón: getStrikerTarget() devolvería Translation2d(0,0), la esquina del campo. Los botones Start/Back nunca dejan STRIKER con TurretMode NORMAL.</div>' : '';
+
+  document.getElementById('stateout').innerHTML=`
+    <div class="mcell"><div class="h">Drivetrain</div><div class="b">${drive}</div></div>
+    <div class="mcell"><div class="h">Shooter fijo</div><div class="b">${shooter}</div></div>
+    <div class="mcell"><div class="h">Torreta</div><div class="b">${turret}</div></div>
+  `+ (warn?`<div style="grid-column:1/-1">${warn}</div>`:'');
+}
+drawState();
+
+/* ═══════════ GAMEPADS ═══════════ */
+const B0={
+ 'LS':{n:'Stick izquierdo',d:'Traslación field-relative. Se leen negados: -getLeftY() → X del campo, -getLeftX() → Y del campo.',kv:[['Comando','DriveCommands.joystickDrive'],['Tipo','Default command'],['Deadband','0.1 sobre la magnitud'],['Curva','magnitud al cuadrado'],['Escala','× getMaxLinearSpeedMetersPerSec()']]},
+ 'RS':{n:'Stick derecho (X)',d:'Rotación del chasis. SOLO tiene efecto cuando Drive.mode == NORMAL. En ORBIT y FEEDER lo sobrescribe el PID de heading.',kv:[['Comando','DriveCommands.joystickDrive'],['Deadband','0.1'],['Curva','copySign(ω², ω)'],['Escala','× getMaxAngularSpeedRadPerSec()']]},
+ 'A':{n:'— sin asignar —',d:'No hay binding en el control del piloto para el botón A.',kv:[]},
+ 'B':{n:'Reset de giroscopio',d:'Reescribe la rotación de la pose a 0° (alianza azul) o 180° (alianza roja), conservando la traslación actual.',kv:[['Comando','Commands.runOnce → drive.setPose'],['Trigger','onTrue'],['Especial','.ignoringDisable(true) — funciona con el robot deshabilitado'],['Uso','alinear el field-relative antes del match']]},
+ 'X':{n:'Toggle ORBIT',d:'Alterna Drive.mode entre ORBIT y NORMAL. Además fuerza Robot.mode = BOMBER y Turret.mode = NORMAL.',kv:[['Trigger','onTrue (toggle)'],['Efecto','ORBIT ↔ NORMAL'],['Colateral','RobotMode → BOMBER'],['Colateral','TurretMode → NORMAL'],['Log','RobotMode, DriveMode, TurretMode']]},
+ 'Y':{n:'Toggle FEEDER',d:'Alterna Drive.mode entre FEEDER y NORMAL. El heading se fija a 0°/180° para pasar FUEL a lo largo del campo.',kv:[['Trigger','onTrue (toggle)'],['Efecto','FEEDER ↔ NORMAL'],['Colateral','RobotMode → BOMBER'],['Colateral','TurretMode → NORMAL']]},
+ 'LB':{n:'— sin asignar —',d:'Sin binding en el control del piloto.',kv:[]},
+ 'RB':{n:'— sin asignar —',d:'Sin binding en el control del piloto.',kv:[]},
+ 'LT':{n:'— sin asignar —',d:'Sin binding en el control del piloto.',kv:[]},
+ 'RT':{n:'— sin asignar —',d:'Sin binding en el control del piloto.',kv:[]},
+ 'BACK':{n:'Toggle DS_TRACKER',d:'La torreta rastrea la pared de feeder de tu alianza. Pone Robot.mode = STRIKER (el shooter fijo se apaga) y Drive.mode = NORMAL.',kv:[['Trigger','onTrue (toggle)'],['TurretMode','DS_TRACKER ↔ NORMAL'],['RobotMode','STRIKER / BOMBER'],['Colateral','DriveMode → NORMAL']]},
+ 'START':{n:'Toggle HUB_TRACKER',d:'La torreta rastrea el HUB de tu alianza mientras manejas libre. Pone Robot.mode = STRIKER y Drive.mode = NORMAL.',kv:[['Trigger','onTrue (toggle)'],['TurretMode','HUB_TRACKER ↔ NORMAL'],['RobotMode','STRIKER / BOMBER'],['Colateral','DriveMode → NORMAL']]},
+ 'DPAD':{n:'— sin asignar —',d:'Sin binding de D-Pad en el control del piloto.',kv:[]}
+};
+const B1={
+ 'LS':{n:'— sin asignar —',d:'Sin binding.',kv:[]},
+ 'RS':{n:'— sin asignar —',d:'Sin binding.',kv:[]},
+ 'A':{n:'Extender intake',d:'Manda el extensor a la posición extendida (20 rad) con PositionVoltage. Al soltar, stopExtensor().',kv:[['Comando','Commands.startEnd'],['Trigger','whileTrue'],['Método','intake.setExtended()'],['Al soltar','intake.stopExtensor()'],['Lazo','cerrado, kP=10']]},
+ 'B':{n:'Retraer intake',d:'Manda el extensor a la posición retraída (3.5 rad). Ojo: el soft limit inverso está a 2 rad, no a 3.5.',kv:[['Comando','Commands.startEnd'],['Trigger','whileTrue'],['Método','intake.setExtendedReset()'],['Al soltar','intake.stopExtensor()']]},
+ 'X':{n:'DISPARAR (hold)',d:'El botón más importante del robot. Alimenta el BooleanSupplier de TurretCommands Y de ShooterCommands. Mientras lo mantienes: se calcula distancia y ángulo al objetivo, se consulta el shot map, se ajusta hood y se acelera el flywheel al RPS correcto.',kv:[['Consumido por','TurretCommands.joystickTurretCmd'],['Consumido por','ShooterCommands.joystickShooterCmd'],['Tipo','BooleanSupplier en default command'],['Al soltar','torreta a 0°, hood a reposo, flywheels off'],['Ojo','NO alimenta FUEL — eso son los bumpers']]},
+ 'LB':{n:'Alimentar shooter fijo',d:'Y-Valve hacia el cañón fijo: shooterWheels +0.25, turretWheels −0.25, feeder +1.0, más los rodillos de entrada a 0.4.',kv:[['Comando','IndexerCommands.joystickIndexerCmd'],['Tipo','Default command (lee el estado del botón)'],['Métodos','indexer.intake() + indexShooter()'],['Con RB','→ indexBoth()']]},
+ 'RB':{n:'Alimentar torreta',d:'Y-Valve hacia la torreta: turretWheels +0.25, shooterWheels −0.25, feeder +1.0.',kv:[['Comando','IndexerCommands.joystickIndexerCmd'],['Métodos','indexer.intake() + indexTurret()'],['Con LB','→ indexBoth()']]},
+ 'LT':{n:'Rodillos de intake',c:'Umbral 0.5',d:'Gira los rodillos del intake a 0.8 duty para tragar FUEL. No extiende el intake — eso es el botón A.',kv:[['Comando','Commands.startEnd'],['Trigger','leftTrigger(0.5).whileTrue'],['Método','intake.intake()'],['Al soltar','intake.stopRollers()']]},
+ 'RT':{n:'Expulsar del indexer',c:'Umbral 0.5',d:'Fallback de desatasque: corre feeder, shooterWheels y turretWheels en reversa.',kv:[['Comando','Commands.runEnd'],['Trigger','rightTrigger(0.5).whileTrue'],['Método','indexer.outtake()'],['Al soltar','indexer.stopIndexer()']]},
+ 'BACK':{n:'Retraer SIN límites',d:'Modo recalibración: desactiva los soft limits del extensor y lo corre en lazo abierto a −0.24. Úsalo sólo para llevar el mecanismo a su tope mecánico y re-referenciar.',kv:[['Comando','Commands.runEnd'],['Al presionar','setSoftwareLimit(false) + retract()'],['Al soltar','setSoftwareLimit(true) + stopExtensor()'],['Riesgo','sin límites puedes dañar el rack']]},
+ 'START':{n:'Extender SIN límites',d:'Igual que Back pero hacia afuera, a +0.24 en lazo abierto.',kv:[['Comando','Commands.runEnd'],['Al presionar','setSoftwareLimit(false) + extend()'],['Al soltar','setSoftwareLimit(true) + stopExtensor()'],['Riesgo','sin límites puedes dañar el rack']]},
+ 'DPAD':{n:'D-Pad ↑ · Prueba de flywheels',d:'Arranca AMBOS flywheels (torreta y shooter fijo) al 25% de duty cycle. Es lazo abierto, sólo para verificar sentido de giro y ruido en el pit.',kv:[['Comando','Commands.runEnd'],['Trigger','povUp().whileTrue'],['Métodos','shooter.setFlywheelSpeed(0.25) + turret.setFlywheelSpeed(0.25)'],['Al soltar','ambos stopFlywheel()'],['Nota','usa el método @Deprecated a propósito']]}
+};
+
+function padSVG(){
+return `<svg viewBox="0 0 520 250" style="width:100%;height:auto;max-width:520px;display:block;margin:0 auto">
+  <rect class="body" x="14" y="52" width="492" height="150" rx="52"/>
+  <rect class="body" x="150" y="30" width="220" height="70" rx="22"/>
+
+  <g class="hot" data-b="LT"><rect class="sh" x="52" y="14" width="66" height="30" rx="11"/><text class="lb" x="85" y="30">LT</text></g>
+  <g class="hot" data-b="RT"><rect class="sh" x="402" y="14" width="66" height="30" rx="11"/><text class="lb" x="435" y="30">RT</text></g>
+  <g class="hot" data-b="LB"><rect class="sh" x="52" y="49" width="66" height="26" rx="10"/><text class="lb" x="85" y="63">LB</text></g>
+  <g class="hot" data-b="RB"><rect class="sh" x="402" y="49" width="66" height="26" rx="10"/><text class="lb" x="435" y="63">RB</text></g>
+
+  <g class="hot" data-b="LS"><circle class="sh" cx="98" cy="110" r="30"/><text class="lb" x="98" y="110">LS</text></g>
+  <g class="hot" data-b="RS"><circle class="sh" cx="300" cy="168" r="30"/><text class="lb" x="300" y="168">RS</text></g>
+
+  <g class="hot" data-b="DPAD">
+    <path class="sh" d="M205 141h20v-20h20v20h20v20h-20v20h-20v-20h-20z"/>
+    <text class="lb" x="235" y="161" style="font-size:9px">DPAD</text>
+  </g>
+
+  <g class="hot" data-b="Y"><circle class="sh" cx="422" cy="86" r="20"/><text class="lb" x="422" y="86">Y</text></g>
+  <g class="hot" data-b="X"><circle class="sh" cx="386" cy="118" r="20"/><text class="lb" x="386" y="118">X</text></g>
+  <g class="hot" data-b="B"><circle class="sh" cx="458" cy="118" r="20"/><text class="lb" x="458" y="118">B</text></g>
+  <g class="hot" data-b="A"><circle class="sh" cx="422" cy="150" r="20"/><text class="lb" x="422" y="150">A</text></g>
+
+  <g class="hot" data-b="BACK"><rect class="sh" x="196" y="66" width="46" height="22" rx="9"/><text class="lb" x="219" y="78" style="font-size:9px">BACK</text></g>
+  <g class="hot" data-b="START"><rect class="sh" x="278" y="66" width="46" height="22" rx="9"/><text class="lb" x="301" y="78" style="font-size:9px">START</text></g>
+</svg>`;
+}
+document.getElementById('pad0').innerHTML=padSVG();
+document.getElementById('pad1').innerHTML=padSVG();
+
+const det=document.getElementById('ctrldet');
+function wire(elId,map,padName){
+  document.querySelectorAll('#'+elId+' .hot').forEach(g=>{
+    g.onclick=()=>{
+      document.querySelectorAll('.hot').forEach(x=>x.classList.remove('sel'));
+      g.classList.add('sel');
+      const k=g.dataset.b, o=map[k];
+      det.innerHTML=`
+        <div class="dk">${padName} · ${k}</div>
+        <h4>${o.n}</h4>
+        <p>${o.d}</p>
+        ${o.kv.map(([a,b])=>`<div class="kv"><span>${a}</span><span>${b}</span></div>`).join('')}`;
+    };
+  });
+}
+wire('pad0',B0,'Piloto');
+wire('pad1',B1,'Mecanismos');
+
+/* ═══════════ CALCULADORA DE TIRO ═══════════ */
+const HOOD=[[1.0,0.0],[4.0,16.5]];
+const FLY=[[1.0,33],[2.0,33],[3.0,39],[4.0,42],[5.0,45]];
+function interp(map,x){
+  if(x<=map[0][0]) return map[0][1];
+  if(x>=map[map.length-1][0]) return map[map.length-1][1];
+  for(let i=0;i<map.length-1;i++){
+    const [x0,y0]=map[i],[x1,y1]=map[i+1];
+    if(x>=x0&&x<=x1) return y0+(y1-y0)*(x-x0)/(x1-x0);
+  }
+  return map[map.length-1][1];
+}
+const slider=document.getElementById('dist');
+function calc(){
+  const d=parseFloat(slider.value);
+  const h=interp(HOOD,d), r=interp(FLY,d);
+  document.getElementById('o-dist').textContent=d.toFixed(1)+' m';
+  document.getElementById('o-hood').textContent=h.toFixed(1)+'°';
+  document.getElementById('o-rps').textContent=r.toFixed(1);
+  document.getElementById('o-rpm').textContent=Math.round(r*60);
+  const n=document.getElementById('calcnote');
+  if(d<1.0){ n.className='note warn'; n.innerHTML='<b>Fuera del mapa por abajo.</b> Ambos mapas hacen clamp al primer punto: hood 0.0° y 33 RPS. A menos de 1 m el tiro se pasa de largo.'; }
+  else if(d>5.0){ n.className='note bad'; n.innerHTML='<b>Fuera del mapa por arriba.</b> El flywheel se queda pegado en 45 RPS y el hood en 16.5°. El punto de 6.0 m está comentado en ShooterConstants — a esta distancia el robot dispara corto, no extrapola.'; }
+  else if(d>4.0){ n.className='note warn'; n.innerHTML='<b>El hood ya está clampeado.</b> El mapa de hood sólo llega a 4.0 m; de 4 a 5 m sube el RPS pero el ángulo se queda en 16.5°. Vale la pena agregar puntos de hood a 5 y 6 m.'; }
+  else if(d>=1.0&&d<=2.0){ n.className='note'; n.innerHTML='<b>Zona plana de RPS.</b> Entre 1 y 2 m el flywheel se mantiene en 33 RPS y sólo cambia el ángulo del hood — es la zona de tiro cercano al hub.'; }
+  else { n.className='note good'; n.innerHTML='<b>Dentro del rango calibrado.</b> Ambos mapas están interpolando entre puntos reales medidos.'; }
+}
+slider.oninput=calc; calc();
+
+/* ═══════════ HALLAZGOS ═══════════ */
+const FIND=[
+{s:'crit',t:'#1 · División entera silenciosa en los gear ratios',
+ b:`<p>En <code>IndexerConstants</code> e <code>IntakeConstants</code> los ratios se escriben con enteros. Java trunca:</p>
+ <pre>rollersGearRatio  = <span class="n">40/12</span>;              <span class="c">// = 3.0   (debería ser 3.333)</span>
+feederGearRatio   = <span class="n">50/12</span>;              <span class="c">// = 4.0   (debería ser 4.167)</span>
+rollersGearRatio  = (<span class="n">20/12</span>);            <span class="c">// = 1.0   (debería ser 1.667) ← intake</span>
+extensorGearRatio = (<span class="n">54/12</span>)*(<span class="n">36/18</span>);  <span class="c">// = 8.0   (debería ser 9.0)</span></pre>
+ <p>Estos valores van directo a <code>Feedback.SensorToMechanismRatio</code>. El del <b>extensor</b> es el grave: con 8.0 en vez de 9.0, cada posición comandada queda <b>12.5% desviada</b>. Tus posiciones de 20 y 3.5 rad no son las que crees, y por eso los soft limits del IO tuvieron que "ajustarse" a mano a 2 y 20.5.</p>
+ <p>En <code>TurretConstants</code> y <code>ShooterConstants</code> sí están escritos como <code>50.0/12.0</code> — la inconsistencia sugiere que se corrigieron ahí y se olvidaron aquí.</p>`,
+ f:'Cambiar todos los literales a doubles: <code>40.0/12.0</code>, <code>50.0/12.0</code>, <code>20.0/12.0</code>, <code>(54.0/12.0)*(36.0/18.0)</code>. Después de eso hay que <b>re-medir</b> las posiciones del extensor: los 20 y 3.5 rad actuales ya no corresponderán al mismo lugar físico.'},
+
+{s:'crit',t:'#2 · La torreta crea dos objetos TalonFX para el mismo hardware',
+ b:`<p><code>TurretIOTalonFX extends ShooterIOTalonFX</code>, así que ya trae flywheel y hood. Pero en <code>RobotContainer</code>:</p>
+ <pre>turret = <span class="k">new</span> Turret(
+    <span class="k">new</span> TurretIOTalonFX(flywheelCanId, hoodCanId, rotationMotorCanId), <span class="c">// 28, 27, 26</span>
+    <span class="k">new</span> ShooterIOTalonFX(flywheelCanId, hoodCanId));                  <span class="c">// 28, 27 OTRA VEZ</span></pre>
+ <p>Consecuencias reales:</p>
+ <ul>
+  <li>Dos objetos <code>TalonFX</code> apuntando al ID 28 y dos al 27. Cada uno aplica su configuración completa al arranque y registra su propio juego de StatusSignals — el doble de tráfico CAN del necesario.</li>
+  <li><code>turret.setFlywheelVelocity()</code> va al <b>segundo</b> IO (el heredado de <code>Shooter</code>), mientras <code>turret.rotateToAngle()</code> va al primero. Los inputs que ves en <code>Turret.periodic()</code> vienen del primero. Estás controlando por un canal y leyendo por otro.</li>
+  <li><code>Turret.periodic()</code> llama <code>super.periodic()</code>, que hace <code>Logger.processInputs("Shooter", inputs)</code> — <b>la misma clave</b> que usa el shooter fijo. Las dos tablas se pisan en cada ciclo del log.</li>
+ </ul>`,
+ f:'Dos caminos. El limpio: que <code>Turret</code> <b>no</b> extienda <code>Shooter</code> y componga un <code>TurretIO</code> único que ya incluye flywheel + hood + rotación (es lo que <code>TurretIOTalonFX</code> ya hace). El rápido: pasar el mismo objeto a ambos parámetros del constructor y cambiar la clave del log de la torreta a <code>"TurretShooter"</code> en <code>Shooter.periodic()</code> vía un campo <code>logKey</code> protegido.'},
+
+{s:'crit',t:'#3 · kSpeedAt12Volts está en 10 m/s; el robot hace ~6.1 m/s',
+ b:`<p><code>TunerConstants.kSpeedAt12Volts = MetersPerSecond.of(10)</code>. El Tech Binder documenta 19.9 ft/s de velocidad libre = <b>6.07 m/s</b>. Ese valor se usa en tres lugares críticos:</p>
+ <ul>
+  <li><code>getMaxLinearSpeedMetersPerSec()</code> — escala los sticks del piloto. Al fondo del recorrido pides 10 m/s y el robot da 6. La zona útil del stick es sólo el 60% superior, y la curva cuadrática empeora eso.</li>
+  <li><code>desaturateWheelSpeeds()</code> — no desatura nunca porque el límite está muy alto. En giros combinados con traslación, los módulos exteriores se saturan de verdad y el robot se desvía de la trayectoria comandada.</li>
+  <li><code>PP_CONFIG</code> de PathPlanner — el planificador cree que puede ir a 10 m/s y genera trayectorias que el robot no puede seguir.</li>
+ </ul>`,
+ f:'Correr "Drive Simple FF Characterization" desde el selector de autónomos, tomar la velocidad libre real medida y ponerla ahí. Si no hay tiempo de caracterizar, usar <code>MetersPerSecond.of(6.07)</code> del binder — es infinitamente mejor que 10.'},
+
+{s:'crit',t:'#4 · Los tres modos del binder no existen en el código',
+ b:`<p>El Tech Binder describe una estrategia estilo F1 con tres modos que <b>cambian la velocidad del drivetrain</b>: Bomber al 70%, Striker al 80%, Interceptor al 100%. El código tiene:</p>
+ <ul>
+  <li><code>RobotMode</code> con sólo <b>BOMBER</b> y <b>STRIKER</b> — no existe INTERCEPTOR.</li>
+  <li>Ninguno de los dos escala la velocidad. <code>getMaxLinearSpeedMetersPerSec()</code> siempre devuelve <code>kSpeedAt12Volts</code>, sin importar el modo.</li>
+  <li>Lo que sí cambia el modo es <b>qué cañón dispara</b>, que no es lo que dice el binder.</li>
+ </ul>
+ <p>No es un bug de compilación, es una brecha entre el documento que van a presentar a jueces y el robot que van a manejar. Si un juez pregunta "muéstrame el modo Interceptor", no existe.</p>`,
+ f:'Agregar un multiplicador en <code>RobotMode</code> (<code>BOMBER(0.70)</code>, <code>STRIKER(0.80)</code>, <code>INTERCEPTOR(1.00)</code>) y multiplicarlo en <code>joystickDrive</code> al escalar la velocidad lineal. Es un cambio de ~10 líneas y alinea el robot con el binder. Alternativamente, actualizar el binder para que describa BOMBER/STRIKER como están implementados — pero implementar es más impresionante.'},
+
+{s:'med',t:'#5 · isFlywheelAtSpeed() existe, se loguea y nunca gatea nada',
+ b:`<p>El método está bien escrito, la tolerancia (±2 RPS) es razonable y hasta se publica en <code>Shooter/FlywheelAtSpeed</code>. Pero <code>IndexerCommands.joystickIndexerCmd</code> alimenta en cuanto el operador presiona un bumper, sin consultarlo.</p>
+ <p>Resultado práctico: si el operador presiona X y RB casi al mismo tiempo, las primeras 1–2 pelotas salen mientras el flywheel todavía está acelerando y caen cortas. En autónomo pasa lo mismo — la coreografía es por tiempo (<code>waitSeconds(1)</code>) en vez de por estado.</p>`,
+ f:'Pasarle el <code>Shooter</code> y el <code>Turret</code> a <code>joystickIndexerCmd</code> y condicionar el feeder: alimentar la vía del shooter fijo sólo si <code>shooter.isFlywheelAtSpeed()</code>, la de la torreta sólo si <code>turret.isFlywheelAtSpeed()</code>. Los rodillos de entrada pueden seguir corriendo siempre. En autónomo, reemplazar el <code>waitSeconds(1)</code> por <code>Commands.waitUntil(shooter::isFlywheelAtSpeed)</code>. <b>Es el arreglo de mayor retorno de toda la lista.</b>'},
+
+{s:'med',t:'#6 · La salida del PID de heading se re-escala en ORBIT y FEEDER',
+ b:`<p>En <code>joystickDrive</code>, los modos ORBIT y FEEDER calculan omega con un <code>ProfiledPIDController</code> cuya restricción de velocidad es <b>4 rad/s</b>. Ese valor ya está en rad/s. Pero después:</p>
+ <pre>ChassisSpeeds speeds = <span class="k">new</span> ChassisSpeeds(
+    ..., ..., omega * drive.getMaxAngularSpeedRadPerSec());  <span class="c">// × 20.25</span></pre>
+ <p>Con <code>DRIVE_BASE_RADIUS = 0.494 m</code> y 10 m/s, <code>getMaxAngularSpeedRadPerSec()</code> vale ~20.25. La salida del PID se multiplica por 20 y se satura al instante: el control de heading se comporta como bang-bang y oscila alrededor del objetivo en vez de asentarse.</p>
+ <p>La prueba de que es un error: <code>joystickDriveAtAngle</code>, en el mismo archivo, hace exactamente lo mismo y <b>no</b> multiplica.</p>`,
+ f:'En los casos ORBIT y FEEDER, no multiplicar por <code>getMaxAngularSpeedRadPerSec()</code>. La forma más limpia es calcular <code>omegaRadPerSec</code> como variable separada: manual → <code>ω × maxAngular</code>, PID → directo. Después de esto probablemente puedan subir <code>ANGLE_KP</code> por encima de 0.5 y el orbit se sentirá mucho mejor.'},
+
+{s:'med',t:'#7 · Los soft limits del intake están hardcodeados y no coinciden con las constantes',
+ b:`<p><code>IntakeIOTalonFX</code> escribe los límites directamente:</p>
+ <pre>ForwardSoftLimitThreshold = Rotation2d.fromRadians(<span class="n">20.5</span>).getRotations();
+ReverseSoftLimitThreshold = Rotation2d.fromRadians(<span class="n">2</span>).getRotations();</pre>
+ <p>Mientras <code>IntakeConstants</code> declara <code>extendedRotation = 20</code> y <code>extendedRotationReversed = 3.5</code>. El límite inverso (2) está <b>por debajo</b> del setpoint de retracción (3.5), así que hay 1.5 rad de recorrido que el mecanismo puede alcanzar pero al que nunca se le comanda ir.</p>
+ <p>Peor: los mismos valores están duplicados dentro de <code>setSoftwareLimit()</code>. Cambiar uno sin el otro deja el robot en un estado inconsistente según qué botón se presionó al último.</p>`,
+ f:'Mover 20.5 y 2.0 a <code>IntakeConstants</code> como <code>extensorForwardLimitRad</code> / <code>extensorReverseLimitRad</code> y referenciarlas desde los dos lugares. Además extraer la construcción del <code>TalonFXConfiguration</code> a un método privado para no duplicar 15 líneas.'},
+
+{s:'med',t:'#8 · setSoftwareLimit() reaplica toda la configuración dentro del scheduler',
+ b:`<p>Los botones Start y Back del control de mecanismos llaman <code>setSoftwareLimit(false)</code>, que construye un <code>TalonFXConfiguration</code> completo y lo aplica con timeout de 0.25 s. Eso corre en el hilo principal, dentro del ciclo de 20 ms del <code>CommandScheduler</code>.</p>
+ <p>Un <code>apply()</code> con timeout de 0.25 s puede bloquear más de 10 ciclos del robot. Vas a ver "Loop time overrun" en la consola y, en el peor caso, la odometría pierde muestras justo cuando el operador está recalibrando el intake.</p>`,
+ f:'Usar <code>configurator.apply(new SoftwareLimitSwitchConfigs()...)</code> aplicando <b>sólo</b> el sub-config de límites, con timeout de 0.0 (fire-and-forget). Es una sola trama CAN en vez de la configuración completa. Alternativamente, mover la llamada a un hilo aparte o a <code>testInit()</code>.'},
+
+{s:'med',t:'#9 · Los NamedCommands infinitos dependen de que el .auto los envuelva',
+ b:`<p><code>IndexTurret</code>, <code>IndexBoth</code> y <code>StartIntakeRollers</code> terminan en <code>.repeatedly()</code> sin condición de salida. Hoy funcionan porque todos los archivos <code>.auto</code> los ponen dentro de bloques <code>deadline</code> con un <code>wait</code> que los mata.</p>
+ <p><code>AimTurret</code> tiene el mismo problema: es un <code>Commands.run()</code> puro que nunca termina.</p>
+ <p>Es una bomba de tiempo: el día que alguien agregue un auto nuevo en la interfaz de PathPlanner y ponga uno de estos en secuencia, el autónomo se congela y nadie va a entender por qué.</p>`,
+ f:'Añadir <code>.withTimeout(...)</code> por defecto a los tres comandos pulsantes, o mejor, condicionarlos: <code>IndexTurret</code> podría terminar cuando <code>!turret.isFlywheelAtSpeed()</code> deje de cumplirse por N ciclos. Como mínimo, documentar en un comentario que DEBEN ir dentro de un deadline.'},
+
+{s:'low',t:'#10 · Constantes de hood declaradas al revés y nunca usadas',
+ b:`<p><code>ShooterConstants</code> declara:</p>
+ <pre>maxHoodAngleRad = Math.toRadians(<span class="n">0.5</span>);   <span class="c">// "max" = 0.5°</span>
+minHoodAngleRad = Math.toRadians(<span class="n">17.0</span>);  <span class="c">// "min" = 17°  ← max &lt; min</span></pre>
+ <p>Los nombres están invertidos respecto a sus valores. Y más importante: <b>ninguna de las dos se usa en ningún lado</b>. El motor del hood no tiene soft limits configurados, a diferencia del extensor del intake y de la rotación de la torreta. Si el shot map alguna vez devuelve un valor fuera de rango, o si alguien llama <code>setHoodOpenLoop()</code> por error, nada detiene el mecanismo.</p>`,
+ f:'Renombrarlas correctamente y aplicarlas como <code>SoftwareLimitSwitch</code> en el <code>hoodConfig</code> de <code>ShooterIOTalonFX</code>, igual que se hace con la torreta.'},
+
+{s:'low',t:'#11 · Vision sin referencia y con conteo de cámaras inconsistente',
+ b:`<p><code>new Vision(...)</code> se llama sin asignar el resultado. Funciona porque <code>SubsystemBase</code> se auto-registra en el scheduler, pero <code>getTargetX()</code> queda inalcanzable desde cualquier otra parte del código.</p>
+ <p>Además, REAL y SIM pasan <b>una</b> cámara, pero la rama REPLAY pasa <b>dos</b> <code>VisionIO</code> vacíos. Los arreglos de inputs y de alertas tendrán tamaños distintos según el modo, así que un replay no reproduce fielmente la estructura del log original.</p>`,
+ f:'Asignar a un campo <code>private final Vision vision;</code> y unificar el número de cámaras entre las tres ramas. Si algún día se agrega la segunda cámara (<code>camera1Name</code> y <code>robotToCamera1</code> ya están definidas en <code>VisionConstants</code>), habrá que tocar las tres.'},
+
+{s:'low',t:'#12 · Código muerto e imports sin usar',
+ b:`<ul>
+  <li><code>IntakeCommands.joystickIntakeCmd</code> — comando completo, bien escrito, <b>nunca referenciado</b>. Los bindings de intake se hacen inline en <code>RobotContainer</code>. Peor: su lógica (extender automáticamente al presionar intake) es <b>mejor</b> que la actual, que exige al operador presionar A y LT por separado.</li>
+  <li><code>intake.outtake()</code> — existe en el subsistema pero no hay ningún binding de teleop que lo llame. No pueden escupir FUEL por el intake.</li>
+  <li><code>extensorIsAtPosition()</code> — nunca se llama.</li>
+  <li>Imports sin usar: <code>MathUtil</code> y <code>Rotation2d</code> en <code>IntakeCommands</code>, <code>MathUtil</code> y <code>TurretConstants</code> en <code>TurretCommands</code>, <code>ShooterConstants</code> en <code>Intake.java</code>.</li>
+  <li>La rama REPLAY usa <code>new IntakeIOSim(){}</code> en vez de <code>new IntakeIO(){}</code> — un replay con IO de simulación no es un replay puro.</li>
+  <li>Los metadatos de build (<code>GIT_SHA</code>, <code>BUILD_DATE</code>) están comentados en <code>Robot.java</code>. Sin eso, un log no te dice qué versión del código lo produjo.</li>
+ </ul>`,
+ f:'Descomentar los metadatos de build (es lo primero que van a querer cuando algo falle en un evento). Considerar adoptar <code>joystickIntakeCmd</code> como default command del intake — le quita un botón de carga al operador. Y borrar lo demás.'}
+];
+
+const sevLabel={crit:['t-crit','Crítico'],med:['t-med','Medio'],low:['t-low','Menor']};
+document.getElementById('findings').innerHTML=FIND.map((f,i)=>`
+  <div class="acc" data-i="${i}">
+    <div class="acch">
+      <span class="tag ${sevLabel[f.s][0]}">${sevLabel[f.s][1]}</span>
+      <span class="ttl">${f.t}</span>
+      <span class="arw">▶</span>
+    </div>
+    <div class="accb">
+      ${f.b}
+      <div class="fix"><div class="fl">Arreglo propuesto</div><p>${f.f}</p></div>
+    </div>
+  </div>`).join('');
+document.querySelectorAll('.acch').forEach(h=>{
+  h.onclick=()=>h.parentElement.classList.toggle('open');
+});
+document.querySelector('.acc').classList.add('open');
+</script>
+</body>
+</html>

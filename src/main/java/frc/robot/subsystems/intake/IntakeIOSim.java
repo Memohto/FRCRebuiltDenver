@@ -45,6 +45,7 @@ public class IntakeIOSim implements IntakeIO {
 
         inputs.extensorConnected = true;
         inputs.extensorPosition = Rotation2d.fromRadians(extensorSim.getAngularPositionRad() / IntakeConstants.extensorGearRatio);
+        inputs.extensorPositionRad = extensorSim.getAngularPositionRad() / IntakeConstants.extensorGearRatio;
         inputs.extensorVelocityRadPerSec = extensorSim.getAngularVelocityRadPerSec();
         inputs.extensorAppliedVolts = extensorAppliedVolts;
         inputs.extensorCurrentAmps = extensorSim.getCurrentDrawAmps();

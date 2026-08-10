@@ -74,8 +74,10 @@ public class IntakeIOTalonFX implements IntakeIO {
 
         extensorConfig.SoftwareLimitSwitch.ReverseSoftLimitEnable = true;
         extensorConfig.SoftwareLimitSwitch.ForwardSoftLimitEnable = true;
-        extensorConfig.SoftwareLimitSwitch.ForwardSoftLimitThreshold = Rotation2d.fromRadians(20.5).getRotations(); // 20.5
-        extensorConfig.SoftwareLimitSwitch.ReverseSoftLimitThreshold = Rotation2d.fromRadians(2).getRotations(); // 2
+        extensorConfig.SoftwareLimitSwitch.ForwardSoftLimitThreshold =
+                Rotation2d.fromRadians(IntakeConstants.extensorForwardLimitRad).getRotations();
+        extensorConfig.SoftwareLimitSwitch.ReverseSoftLimitThreshold =
+                Rotation2d.fromRadians(IntakeConstants.extensorReverseLimitRad).getRotations();
 
         extensorConfig.CurrentLimits.StatorCurrentLimitEnable = true;
         extensorConfig.CurrentLimits.SupplyCurrentLimitEnable = true;
@@ -129,6 +131,7 @@ public class IntakeIOTalonFX implements IntakeIO {
         // Update extensor inputs
         inputs.extensorConnected = extensorConnectedDebounce.calculate(extensorStatus.isOK());
         inputs.extensorPosition = Rotation2d.fromRotations(extensorPosition.getValueAsDouble());
+        inputs.extensorPositionRad = Units.rotationsToRadians(extensorPosition.getValueAsDouble());
         inputs.extensorVelocityRadPerSec = Units.rotationsToRadians(extensorVelocity.getValueAsDouble());
         inputs.extensorAppliedVolts = extensorAppliedVolts.getValueAsDouble();
         inputs.extensorCurrentAmps = extensorCurrent.getValueAsDouble();
@@ -157,8 +160,10 @@ public class IntakeIOTalonFX implements IntakeIO {
 
         extensorConfig.SoftwareLimitSwitch.ReverseSoftLimitEnable = value;
         extensorConfig.SoftwareLimitSwitch.ForwardSoftLimitEnable = value;
-        extensorConfig.SoftwareLimitSwitch.ForwardSoftLimitThreshold = Rotation2d.fromRadians(20.5).getRotations(); // 20.5
-        extensorConfig.SoftwareLimitSwitch.ReverseSoftLimitThreshold = Rotation2d.fromRadians(2).getRotations(); // 2
+        extensorConfig.SoftwareLimitSwitch.ForwardSoftLimitThreshold =
+                Rotation2d.fromRadians(IntakeConstants.extensorForwardLimitRad).getRotations();
+        extensorConfig.SoftwareLimitSwitch.ReverseSoftLimitThreshold =
+                Rotation2d.fromRadians(IntakeConstants.extensorReverseLimitRad).getRotations();
 
         extensorConfig.CurrentLimits.StatorCurrentLimitEnable = true;
         extensorConfig.CurrentLimits.SupplyCurrentLimitEnable = true;

@@ -361,6 +361,27 @@ public class Drive extends SubsystemBase {
     return getMaxLinearSpeedMetersPerSec() / DRIVE_BASE_RADIUS;
   }
 
+  /**
+   * Velocidad del robot en el marco del CAMPO, en m/s.
+   *
+   * <p>
+   * Es lo que necesita la compensación de disparo en movimiento: la pelota sale
+   * del robot cargando la velocidad del robot, y esa velocidad hay que
+   * conocerla en coordenadas de campo para saber a dónde se va a desviar.
+   */
+  public Translation2d getFieldRelativeVelocity() {
+    ChassisSpeeds robotRelative = getChassisSpeeds();
+    Translation2d velocity =
+        new Translation2d(
+            robotRelative.vxMetersPerSecond, robotRelative.vyMetersPerSecond);
+    return velocity.rotateBy(getRotation());
+  }
+
+  /** Velocidad angular medida del chasis, en rad/s. */
+  public double getAngularVelocityRadPerSec() {
+    return getChassisSpeeds().omegaRadiansPerSecond;
+  }
+
   /** Returns thhe distance in meters from a robot pose to a target */
   public static double getDistanceToTargetMeters(Pose2d robotPose, Translation2d target) {
     double dx = target.getX() - robotPose.getX();
