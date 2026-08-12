@@ -427,6 +427,127 @@
               "period": 0.06,
               "show_submit_button": false
             }
+          },
+          {
+            "title": "Estado torreta",
+            "x": 768.0,
+            "y": 0.0,
+            "width": 384.0,
+            "height": 128.0,
+            "type": "Text Display",
+            "properties": {
+              "topic": "/SmartDashboard/Demo/Torreta",
+              "period": 0.06,
+              "show_submit_button": false
+            }
+          },
+          {
+            "title": "Sesgo torreta deg",
+            "x": 768.0,
+            "y": 512.0,
+            "width": 192.0,
+            "height": 128.0,
+            "type": "Text Display",
+            "properties": {
+              "topic": "/SmartDashboard/Demo/Sesgo torreta deg",
+              "period": 0.06,
+              "show_submit_button": false
+            }
+          },
+          {
+            "title": "Compensacion mov (grados)",
+            "x": 0.0,
+            "y": 640.0,
+            "width": 768.0,
+            "height": 256.0,
+            "type": "Graph",
+            "properties": {
+              "topic": "/SmartDashboard/Demo/Compensacion mov deg",
+              "period": 0.06,
+              "time_displayed": 10.0,
+              "color": 4294951175,
+              "line_width": 2.0
+            }
+          },
+          {
+            "title": "Velocidad de campo (m/s)",
+            "x": 768.0,
+            "y": 640.0,
+            "width": 384.0,
+            "height": 256.0,
+            "type": "Graph",
+            "properties": {
+              "topic": "/SmartDashboard/Demo/Velocidad campo mps",
+              "period": 0.06,
+              "time_displayed": 10.0,
+              "color": 4283215696,
+              "line_width": 2.0
+            }
+          },
+          {
+            "title": "Compensacion mov deg",
+            "x": 0.0,
+            "y": 896.0,
+            "width": 192.0,
+            "height": 128.0,
+            "type": "Text Display",
+            "properties": {
+              "topic": "/SmartDashboard/Demo/Compensacion mov deg",
+              "period": 0.06,
+              "show_submit_button": false
+            }
+          },
+          {
+            "title": "Compensacion mov m",
+            "x": 192.0,
+            "y": 896.0,
+            "width": 192.0,
+            "height": 128.0,
+            "type": "Text Display",
+            "properties": {
+              "topic": "/SmartDashboard/Demo/Compensacion mov m",
+              "period": 0.06,
+              "show_submit_button": false
+            }
+          },
+          {
+            "title": "Velocidad campo m/s",
+            "x": 384.0,
+            "y": 896.0,
+            "width": 192.0,
+            "height": 128.0,
+            "type": "Text Display",
+            "properties": {
+              "topic": "/SmartDashboard/Demo/Velocidad campo mps",
+              "period": 0.06,
+              "show_submit_button": false
+            }
+          },
+          {
+            "title": "Sin ver tag s",
+            "x": 576.0,
+            "y": 896.0,
+            "width": 192.0,
+            "height": 128.0,
+            "type": "Text Display",
+            "properties": {
+              "topic": "/SmartDashboard/Demo/Sin ver tag s",
+              "period": 0.06,
+              "show_submit_button": false
+            }
+          },
+          {
+            "title": "Sesgo rumbo deg",
+            "x": 768.0,
+            "y": 896.0,
+            "width": 192.0,
+            "height": 128.0,
+            "type": "Text Display",
+            "properties": {
+              "topic": "/SmartDashboard/Demo/Sesgo rumbo deg",
+              "period": 0.06,
+              "show_submit_button": false
+            }
           }
         ]
       }

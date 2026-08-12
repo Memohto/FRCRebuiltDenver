@@ -19,6 +19,7 @@ import com.pathplanner.lib.util.PathPlannerLogging;
 import edu.wpi.first.hal.FRCNetComm.tInstances;
 import edu.wpi.first.hal.FRCNetComm.tResourceType;
 import edu.wpi.first.hal.HAL;
+import edu.wpi.first.math.MathUtil;
 import edu.wpi.first.math.Matrix;
 import edu.wpi.first.math.estimator.SwerveDrivePoseEstimator;
 import edu.wpi.first.math.geometry.Pose2d;
@@ -41,6 +42,7 @@ import edu.wpi.first.wpilibj.smartdashboard.SmartDashboard;
 import edu.wpi.first.wpilibj2.command.Command;
 import edu.wpi.first.wpilibj2.command.SubsystemBase;
 import edu.wpi.first.wpilibj2.command.sysid.SysIdRoutine;
+import frc.robot.constants.DemoConstants;
 import frc.robot.constants.RobotConstants;
 import frc.robot.constants.TunerConstants;
 import frc.robot.constants.RobotConstants.DriveMode;
@@ -94,6 +96,9 @@ public class Drive extends SubsystemBase {
       new Alert("Disconnected gyro, using kinematics as fallback.", AlertType.kError);
   private final Field2d field2d = new Field2d();
 
+  // Velocidad de campo filtrada, para el disparo en movimiento. Ver
+  // updateFieldVelocity().
+  private Translation2d filteredFieldVelocity = Translation2d.kZero;
 
   private SwerveDriveKinematics kinematics = new SwerveDriveKinematics(getModuleTranslations());
   private Rotation2d rawGyroRotation = Rotation2d.kZero;
@@ -220,6 +225,49 @@ public class Drive extends SubsystemBase {
 
     // Update gyro alert
     gyroDisconnectedAlert.set(!gyroInputs.connected && RobotConstants.currentMode != Mode.SIM);
+
+    updateFieldVelocity();
+  }
+
+  /**
+   * Filtra la velocidad de campo. Se llama UNA vez por ciclo, desde periodic().
+   *
+   * <p>
+   * La velocidad sale de los estados de los módulos, y ésa es una medición
+   * ruidosa: encoders, patinado, y los módulos peleándose entre sí durante un
+   * cambio de dirección. Sin filtrar, el disparo en movimiento hereda ese ruido
+   * y lo convierte en comandos — el hood y el flywheel persiguiendo décimas a 50
+   * Hz, que es justo lo que hace temblar los mecanismos y chupar corriente.
+   *
+   * <p>
+   * El filtro vive aquí y no en {@code ShotSolution} a propósito: la solución de
+   * tiro se calcula tres veces por ciclo (torreta, cañón fijo y chasis) y un
+   * filtro ahí dentro se actualizaría tres veces, filtrando tres veces más
+   * rápido de lo que dice su constante.
+   */
+  private void updateFieldVelocity() {
+    ChassisSpeeds robotRelative = getChassisSpeeds();
+    Translation2d measured =
+        new Translation2d(robotRelative.vxMetersPerSecond, robotRelative.vyMetersPerSecond)
+            .rotateBy(getRotation());
+
+    // Una lectura basura no debe contaminar el estado del filtro, y tampoco
+    // debe congelarlo: quedarse con la última velocidad buena para siempre haría
+    // que el robot compensara por un movimiento que ya no existe. Cero es el
+    // valor seguro — equivale a no compensar.
+    if (!Double.isFinite(measured.getX())
+        || !Double.isFinite(measured.getY())
+        || DriverStation.isDisabled()) {
+      filteredFieldVelocity = Translation2d.kZero;
+      return;
+    }
+
+    double alpha = MathUtil.clamp(DemoConstants.fieldVelocityFilterAlpha, 0.0, 1.0);
+    filteredFieldVelocity =
+        filteredFieldVelocity.plus(measured.minus(filteredFieldVelocity).times(alpha));
+
+    Logger.recordOutput("Drive/FieldVelocityRaw", measured);
+    Logger.recordOutput("Drive/FieldVelocityFiltered", filteredFieldVelocity);
   }
 
   /**
@@ -337,6 +385,21 @@ public class Drive extends SubsystemBase {
     return getPose().getRotation();
   }
 
+  /**
+   * Pose estimada en un instante PASADO, del buffer del pose estimator.
+   *
+   * <p>
+   * Sirve para comparar contra una medición de cámara sin mezclar instantes: el
+   * frame describe el mundo de hace 45 ms, y restarle la pose de ahora mete ese
+   * retraso en la comparación. Con robot moviéndose, ese error se ve como si la
+   * odometría estuviera mal calibrada cuando en realidad sólo llegó tarde.
+   *
+   * @return La pose en ese instante, o vacío si cae fuera del buffer.
+   */
+  public java.util.Optional<Pose2d> samplePoseAt(double timestampSeconds) {
+    return poseEstimator.sampleAt(timestampSeconds);
+  }
+
   /** Resets the current odometry pose. */
   public void setPose(Pose2d pose) {
     poseEstimator.resetPosition(rawGyroRotation, getModulePositions(), pose);
@@ -362,19 +425,21 @@ public class Drive extends SubsystemBase {
   }
 
   /**
-   * Velocidad del robot en el marco del CAMPO, en m/s.
+   * Velocidad del robot en el marco del CAMPO, en m/s, ya filtrada.
    *
    * <p>
    * Es lo que necesita la compensación de disparo en movimiento: la pelota sale
    * del robot cargando la velocidad del robot, y esa velocidad hay que
    * conocerla en coordenadas de campo para saber a dónde se va a desviar.
+   *
+   * <p>
+   * Devuelve el valor filtrado en {@link #updateFieldVelocity()}, no una lectura
+   * instantánea. Cuesta unos milisegundos de retraso y a cambio la corrección no
+   * tiembla. Para telemetría cruda está {@code Drive/FieldVelocityRaw} en el
+   * log.
    */
   public Translation2d getFieldRelativeVelocity() {
-    ChassisSpeeds robotRelative = getChassisSpeeds();
-    Translation2d velocity =
-        new Translation2d(
-            robotRelative.vxMetersPerSecond, robotRelative.vyMetersPerSecond);
-    return velocity.rotateBy(getRotation());
+    return filteredFieldVelocity;
   }
 
   /** Velocidad angular medida del chasis, en rad/s. */

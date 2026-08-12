@@ -407,13 +407,64 @@ objetivoVirtual = objetivoReal − velocidad × tiempoDeVuelo
 ```
 
 Lo elegante es que **resuelve el ángulo Y la distancia de una sola vez**. Si te
-mueves acercándote, el objetivo virtual queda más lejos y el mapa de tiro pide
-más potencia solo. No hay nada que compensar por separado — y como la torreta, el
-cañón fijo y el rumbo del chasis usan todos el mismo punto de mira, los tres se
-adelantan juntos.
+mueves **acercándote**, el objetivo virtual queda entre tú y el HUB —o sea, más
+cerca— y el mapa pide **menos** potencia, porque la pelota ya lleva tu velocidad
+hacia adelante. Alejándote pasa lo contrario. No hay nada que compensar por
+separado.
 
 Se itera dos veces porque mover el objetivo cambia la distancia, y la distancia
 cambia el tiempo de vuelo.
+
+### Apuntado continuo: por qué la torreta ya no se rezaga
+
+Antes la torreta cerraba el lazo sobre `tx`, así que heredaba los defectos de la
+cámara: ~22 FPS y 45 ms de latencia, más una histéresis que congelaba el setpoint
+hasta que el error pasaba de 2.5°. Estrafeando a 0.5 m/s a 3 m del HUB, el HUB se
+mueve a 9.5°/s respecto al robot y la torreta se quedaba **5-6° atrás**,
+moviéndose a brincos. Rezagada hacia el lado del que vienes — que desde afuera se
+ve idéntico a una compensación con el signo invertido.
+
+Ahora, en modo HUB con la pose fresca, el setpoint sale de la **odometría** cada
+20 ms y la visión sólo aporta un **sesgo** filtrado lento:
+
+```
+sesgo    = filtro(ánguloVisión − ánguloOdometría)
+setpoint = ánguloOdometría(HUB, sesgo + compensación de movimiento)
+```
+
+El seguimiento rápido lo hace la odometría, que no tiene ruido ni latencia; el
+sesgo sólo corrige el error sistemático de la pose y de la calibración de la
+cámara, que cambia despacio y por eso se filtra fuerte. Es el mismo truco que
+`HubAlignment` ya usaba para el chasis.
+
+Efecto secundario que importa: **perder el tag ya no cambia nada**. Antes había un
+traspaso visión → odometría; ahora el apuntado siempre salió de la odometría y lo
+único que se congela es el sesgo. En el dashboard lo ves como `HUB continuo ·
+visión` contra `HUB continuo · odometría (Xs)`.
+
+Para volver al comportamiento anterior: `turretContinuousOdometryAim = false`.
+
+### Cómo llega la corrección a los mecanismos
+
+Esto es lo que más importa entender antes de calibrar, porque es donde está el
+truco:
+
+| Consumidor | Qué recibe |
+|---|---|
+| Hood y flywheel (torreta y cañón fijo) | `distanceMeters` — la distancia al objetivo virtual |
+| Ángulo de la torreta | `aimOffsetRad` — **cuánto girar de más**, no a dónde apuntar |
+| Rumbo del chasis en BOMBER | el mismo `aimOffsetRad` |
+
+El ángulo va como **delta** y no como setpoint absoluto por una razón concreta:
+la torreta apunta con `tx` cuando ve el tag y con la pose cuando no. Si la
+compensación viviera sólo en la rama de odometría, la torreta pegaría un brinco
+cada vez que el tag aparece o se pierde — una rama compensando y la otra no. Como
+delta se le suma a las dos y el traspaso sigue siendo continuo.
+
+Por lo mismo, la histéresis de enganche evalúa el error **con** la compensación
+incluida. Si evaluara `tx` a secas, apuntar al centro del tag contaría como
+"enganchada" y congelaría el setpoint justo cuando la compensación pide estar
+corrido unos grados.
 
 ### Procedimiento de tuning
 
@@ -424,20 +475,69 @@ todavía no está medido.
    cuenta los cuadros entre que la pelota sale del shooter y toca el HUB, divide
    entre 60. Repite a 2, 3, 4 y 5 m y llena `kTimeOfFlightMap`.
 2. `shootWhileMovingEnabled = true`, `shootWhileMovingGain = 0.3`.
-3. Maneja **lateralmente** a velocidad constante frente al HUB y dispara.
-   Grafica `Demo/Compensacion mov m`: parado debe ser 0, y al moverte debe
-   crecer proporcional a tu velocidad.
-4. Si los tiros se corrigen pero se quedan cortos de corrección, sube la ganancia
-   de 0.2 en 0.2 hasta 1.0.
-5. **Si los tiros se van MÁS al lado en vez de corregirse, el signo está al
-   revés.** Párale y revisa antes de seguir subiendo.
+3. **Primero sin disparar.** Apunta al HUB, maneja lateralmente y mira
+   `Demo/Compensacion mov deg`: parado debe ser **0 exacto**, y al moverte debe
+   crecer proporcional a tu velocidad y hacia el lado al que te mueves.
+
+   En el log hay dos claves y la diferencia importa: `Demo/Shot/AimOffsetDeg` es
+   lo que la matemática **calculó**, y `Demo/Turret/AimOffsetDeg` es lo que la
+   torreta **aplicó**. En modo HUB deben ser idénticas; si no lo son, algo está
+   gateando la corrección. En caza libre la aplicada es 0 a propósito, porque el
+   objetivo de la solución de tiro es el HUB y la torreta está mirando otra cosa.
+4. Ya con la corrección viéndose sana, dispara moviéndote. Si los tiros se
+   corrigen pero se quedan cortos, sube la ganancia de 0.2 en 0.2 hasta 1.0.
+5. **Si los tiros se van MÁS al lado en vez de corregirse**, párale. Son dos
+   fallas distintas que se ven igual y se arreglan al revés una de la otra, y el
+   número que las distingue es `Demo/Turret/AimOffsetDeg` manejando a la
+   **derecha** frente al HUB:
+
+   | Lo que ves | Qué pasa | Qué haces |
+   |---|---|---|
+   | Offset **positivo**, tiros aún a la derecha | El signo está bien, falta corrección — la ganancia arranca en 0.3, o sea 30% de lo teórico | Sube `shootWhileMovingGain` |
+   | Offset **negativo** | El signo sí está invertido | `shootWhileMovingAimSign = -1.0` |
+
+   Invertir el signo cuando el problema era la ganancia duplica el error en vez
+   de arreglarlo, y desde el otro lado del gimnasio las dos cosas se ven igual de
+   mal. Por eso se mira el número antes de tocar la constante.
 
 ```java
-shootWhileMovingEnabled  = false   // ← el interruptor
-shootWhileMovingGain     = 0.3     // sube de 0.2 en 0.2
-shootWhileMovingMinSpeed = 0.2     // bajo esto no compensa
-shootWhileMovingMaxCompensationMeters = 2.5   // tope de seguridad
+shootWhileMovingEnabled  = true    // ← el interruptor
+shootWhileMovingGain     = 1.0     // 1.0 = compensación teórica completa
+shootWhileMovingAimSign  = 1.0     // ← aquí se invierte el signo, y sólo aquí
+shootWhileMovingMinSpeed = 0.1     // bajo esto no compensa
+shootWhileMovingMaxCompensationMeters = 2.5   // tope en metros
+shootWhileMovingMaxAimOffsetRad = 20°         // tope en ángulo
+fieldVelocityFilterAlpha = 0.4                // filtro de la velocidad
 ```
+
+> Los valores de arriba son los que están en el código ahora. Si los cambias en
+> `DemoConstants`, este bloque queda mentiroso — el archivo manda.
+
+Los dos topes existen porque uno solo no alcanza: 2.5 m de corrección son ~15° a
+9 m de distancia pero más de 60° a 2 m. El tope angular es el que evita que la
+torreta se vaya a medio campo cuando estás pegado al HUB.
+
+### Si al prender el interruptor todo se pone raro
+
+La velocidad viene de los estados de los módulos y trae ruido de encoders y
+patinado. Ese ruido llega al hood, al flywheel y a la torreta convertido en
+comandos nuevos cada 20 ms, y cada comando nuevo **reinicia el perfil de Motion
+Magic**: el mecanismo tiembla en su lugar, chupa corriente y en el peor de los
+casos te tira el voltaje lo suficiente para que la Limelight deje de dar poses —
+y a los 8 s (`odometryTrustSeconds`) la torreta se queda sin odometría y se pone
+a barrer.
+
+Contra eso hay tres defensas, y si algo se pone raro es lo primero que hay que
+revisar:
+
+- `fieldVelocityFilterAlpha` — filtro pasa-bajas de la velocidad. Bájalo si la
+  corrección tiembla.
+- `hoodSetpointDeadbandDeg` y `flywheelSetpointDeadbandRPS` — no re-comandar
+  cambios insignificantes. Súbelos si escuchas al hood zumbar.
+- La distancia ahora se **recorta** al rango `[minShotDistanceMeters,
+  maxShotDistanceMeters]` en vez de saltar a 3 m cuando se sale. El salto viejo
+  se cruzaba seguido con la compensación encendida, porque manejar hacia el HUB
+  acerca el punto de mira.
 
 El modo solo hace esto mucho más fácil de probar: manejas y disparas tú mismo sin
 depender de nadie.
@@ -1229,7 +1329,7 @@ aplican tal cual a los dos modos.
 | Modo solo | Nuevo flag `isSoloDemo`: todo en un control |
 | Volcado suave | Reemplaza al punto fijo: sin corrección, hood plano, potencia fija |
 | BOMBER glitchy | **Arreglado**: torreta y cañón fijo compartían distancia divergente |
-| Shoot while moving | Implementado con objetivo virtual, apagado por defecto |
+| Shoot while moving | Objetivo virtual conectado a distancia **y** ángulo (torreta y chasis), apagado por defecto |
 
 ### Qué cambió en el rollback anterior
 

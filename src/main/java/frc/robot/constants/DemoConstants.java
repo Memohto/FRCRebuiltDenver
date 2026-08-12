@@ -371,6 +371,143 @@ public class DemoConstants {
      */
     public static final double turretUnlockThresholdRad = Math.toRadians(2.5);
 
+    // ── Apuntado continuo por odometría ────────────────────────────────────
+    //
+    // ÉSTA es la solución al rezago de la torreta al manejar.
+    //
+    // El problema: cerrar el lazo sobre tx hace que el apuntado herede los
+    // defectos de la cámara. La Limelight 2 corre a ~22 FPS, así que dos de cada
+    // tres ciclos no traen información nueva, y lo que trae describe dónde
+    // estaba el target hace 45 ms. Encima, la histéresis congela el setpoint
+    // hasta que el error pasa de turretUnlockThresholdRad.
+    //
+    // Sumado: estrafeando a 0.5 m/s a 3 m del HUB, el HUB se mueve a 9.5°/s
+    // respecto al robot, y la torreta se queda 5-6° atrás moviéndose a brincos.
+    // Rezagada hacia el lado del que vienes — que se ve idéntico a una
+    // compensación con el signo invertido.
+    //
+    // La solución es la que ya usa el chasis en HubAlignment, y la que describe
+    // el javadoc de FieldTracking: la visión no ES el apuntado, la visión
+    // CORRIGE la odometría, y el apuntado sale de la odometría.
+    //
+    //     ánguloOdometría   se recalcula cada 20 ms desde la pose, sin latencia
+    //     sesgo             = ánguloVisión − ánguloOdometría, filtrado lento
+    //     setpoint          = ánguloOdometría + sesgo
+    //
+    // El sesgo absorbe el error de la pose y de la calibración de cámara. Como
+    // cambia despacio, se puede filtrar fuerte sin perder respuesta: el
+    // seguimiento rápido lo hace la odometría, que no tiene ruido.
+
+    /**
+     * Apuntar con odometría continua corregida por visión.
+     *
+     * <p>
+     * Ponlo en false para volver al lazo cerrado sobre {@code tx} con histéresis
+     * si algo sale mal en la cancha. <b>Ojo:</b> para volver del todo al
+     * comportamiento de competencia hay que apagar también
+     * {@code shootWhileMovingEnabled}; si no, la compensación de movimiento
+     * sigue entrando por el camino viejo.
+     *
+     * <p>
+     * Sólo aplica al modo HUB con odometría fresca; en caza libre no hay
+     * odometría posible para un tag suelto y siempre se usa visión pura.
+     */
+    public static final boolean turretContinuousOdometryAim = true;
+
+    /**
+     * Filtro del sesgo visión − odometría.
+     *
+     * <p>
+     * Muy lento a propósito: 0.05 a 22 FPS es una constante de tiempo de ~1 s. El
+     * sesgo corrige un error <b>sistemático</b> (pose corrida, cámara
+     * descalibrada), que no cambia de un frame al otro. Filtrar fuerte aquí es lo
+     * que deja el apuntado sin ruido de píxel, y no cuesta respuesta porque el
+     * seguimiento rápido ya lo hace la odometría.
+     *
+     * <p>
+     * Si al ver el tag la torreta tarda demasiado en centrarse fino, súbelo a
+     * 0.10. Si tiembla con el tag a la vista, bájalo.
+     */
+    public static final double turretBiasFilterAlpha = 0.05;
+
+    /**
+     * Tope del sesgo aprendido.
+     *
+     * <p>
+     * Si la corrección de visión pide más que esto, no es un error de
+     * calibración: es que la pose está mal de verdad o la cámara está viendo otra
+     * cosa. Se recorta y se sigue apuntando por odometría, que es la fuente en la
+     * que sí podemos confiar para no mandar la torreta a un lugar absurdo.
+     */
+    public static final double turretMaxBiasRad = Math.toRadians(15.0);
+
+    /**
+     * Deadband de re-comando en apuntado continuo.
+     *
+     * <p>
+     * Mucho más chico que {@code turretSetpointDeadbandRad} (0.8°) porque aquí no
+     * hay ruido que filtrar: el ángulo de odometría es una función suave de la
+     * pose. El deadband grande existía para no perseguir el ruido de tx, y es
+     * justo lo que hacía que la torreta se moviera a brincos.
+     */
+    public static final double turretContinuousDeadbandRad = Math.toRadians(0.15);
+
+    /**
+     * Filtro del setpoint en apuntado continuo. 1.0 = sin filtrar.
+     *
+     * <p>
+     * Alto a propósito, por la misma razón que el deadband es chico. Con 0.5 a
+     * 50 Hz el retraso es de ~20 ms, invisible, y todavía alcanza a suavizar un
+     * salto de pose de un solo ciclo.
+     */
+    public static final double turretContinuousFilterAlpha = 0.5;
+
+    /**
+     * Distancia mínima al HUB para creerle al rumbo, en metros.
+     *
+     * <p>
+     * Pegado al objetivo, el apuntado se vuelve inestable por geometría pura:
+     * unos centímetros de error de pose son decenas de grados de rumbo. Por
+     * debajo de esto se congela el último ángulo bueno en vez de perseguir una
+     * dirección que brinca. Es el equivalente de
+     * {@code hubAlignMinPoseDistanceMeters}, que el chasis ya tenía.
+     */
+    public static final double turretAimMinDistanceMeters = 0.7;
+
+    /**
+     * Antigüedad máxima de la medición con la que se siembra el sesgo, en
+     * segundos.
+     *
+     * <p>
+     * ~3 frames de la cámara. Más viejo que eso, la medición describe una pose
+     * del robot que ya cambió y sembrar con ella metería justo el error de
+     * mezclar instantes que este diseño evita. Si no hay una lo bastante
+     * reciente, no se siembra: el sesgo arranca en cero y el primer frame lo fija.
+     */
+    public static final double turretBiasSeedMaxAgeSeconds = 0.15;
+
+    /**
+     * Sólo aprender el sesgo con las tags CENTRALES del HUB.
+     *
+     * <p>
+     * Las tags de la izquierda están ~35 cm al lado del centro de su cara, y la
+     * cara está a ~60 cm del eje del HUB. La odometría apunta al eje; la cámara,
+     * a la tag. Esa diferencia es <b>geometría, no error de pose</b>, y son ~7°
+     * a 3 m — más de cerca. Metida en el sesgo, corre el apuntado hacia la tag
+     * en vez de hacia el hoyo.
+     *
+     * <p>
+     * Con esto en true, ver sólo la tag izquierda no rompe nada: el apuntado
+     * sigue saliendo de la odometría con el último sesgo bueno. Se pierde la
+     * oportunidad de refinar, no la de apuntar.
+     *
+     * <p>
+     * La corrección geométrica de la tag izquierda al centro del HUB existe en
+     * {@code HubAiming.java}, sin usar. Si algún día la conectan, esto puede
+     * volver a false.
+     */
+    public static final boolean turretBiasRequiresCenterTag = true;
+
     // ── Ganancias específicas de demo para la rotación ─────────────────────
 
     /**
@@ -881,6 +1018,19 @@ public class DemoConstants {
     /** Distancia asumida cuando no hay medición de visión disponible. */
     public static final double fallbackDistanceMeters = 3.0;
 
+    /**
+     * Rango físicamente sensato de distancia de tiro, en metros.
+     *
+     * <p>
+     * Fuera de este rango la distancia se <b>recorta</b> al borde. Antes se
+     * sustituía por {@code fallbackDistanceMeters}, y eso volvía el borde un
+     * escalón: pasar de 0.51 a 0.49 m saltaba la potencia de la mínima a la de
+     * 3 m en un ciclo. El fallback quedó sólo para NaN.
+     */
+    public static final double minShotDistanceMeters = 0.5;
+
+    public static final double maxShotDistanceMeters = 12.0;
+
     // ════════════════════════════════════════════════════════════════════════
     //
     //   D I S P A R O   E N   M O V I M I E N T O
@@ -897,8 +1047,14 @@ public class DemoConstants {
     //     objetivoVirtual = objetivoReal − velocidad × tiempoDeVuelo
     //
     // Resuelve el ángulo Y la distancia de una sola vez: si te mueves
-    // acercándote, el objetivo virtual queda más lejos y el mapa de tiro pide
-    // más potencia solo.
+    // acercándote, el objetivo virtual queda entre tú y el HUB —más cerca— y el
+    // mapa pide menos potencia, porque la pelota ya lleva tu velocidad hacia
+    // adelante. Alejándote pasa lo contrario.
+    //
+    // El ángulo se consume como DELTA (ShotSolution.aimOffsetRad), y se le suma
+    // tanto a la rama de visión como a la de odometría de la torreta. Si sólo
+    // viviera en una, la torreta brincaría cada vez que aparece o se pierde el
+    // tag.
 
     /**
      * Interruptor maestro.
@@ -909,7 +1065,7 @@ public class DemoConstants {
      * empeorar los tiros en vez de mejorarlos. Enciéndelo cuando vayas a tunear,
      * con el procedimiento de la guía.
      */
-    public static final boolean shootWhileMovingEnabled = false;
+    public static final boolean shootWhileMovingEnabled = true;
 
     /**
      * Ganancia de la compensación. 1.0 = compensación teórica completa.
@@ -920,10 +1076,44 @@ public class DemoConstants {
      * lateralmente los tiros se van MÁS al lado en vez de corregirse, el signo
      * está al revés y hay que revisarlo antes de seguir subiendo.
      */
-    public static final double shootWhileMovingGain = 0.3;
+    public static final double shootWhileMovingGain = 1.0;
 
     /** Bajo esta velocidad no se compensa nada. Evita ruido en reposo. */
-    public static final double shootWhileMovingMinSpeed = 0.2;
+    public static final double shootWhileMovingMinSpeed = 0.1;
+
+    /**
+     * Signo de la corrección angular. <b>Aquí se invierte, y sólo aquí.</b>
+     *
+     * <p>
+     * Con {@code 1.0}, moverte a la derecha corre el apuntado a la izquierda, que
+     * es lo que dice la física: la pelota sale cargando tu velocidad, así que hay
+     * que apuntar contra ella.
+     *
+     * <h2>Antes de invertirlo, la prueba de 30 segundos</h2>
+     *
+     * Hay dos fallas que se ven parecido desde el otro lado del gimnasio y que se
+     * arreglan al revés una de la otra. Apunta al HUB de frente, maneja
+     * lateralmente <b>a la derecha</b> y mira {@code Demo/Turret/AimOffsetDeg}:
+     *
+     * <ul>
+     * <li><b>Es POSITIVO y los tiros aún se van a la derecha</b> → el signo está
+     * bien y falta compensación. Sube {@code shootWhileMovingGain}: en 1.0
+     * corrige lo teórico completo, y arriba de eso sobrecorriges a propósito
+     * para tapar lo que el modelo no captura. No toques esta constante:
+     * invertirla ahí empeoraría el tiro al doble.</li>
+     *
+     * <li><b>Es NEGATIVO</b> → el signo sí está al revés. Pon {@code -1.0} aquí.
+     * </li>
+     * </ul>
+     *
+     * <p>
+     * Si resulta negativo, vale la pena entender por qué antes de dejarlo así: la
+     * cadena de convenciones ({@code turretTxSign}, el rumbo de la odometría y el
+     * marco de campo de la velocidad) es la misma que usa el apuntado normal, y
+     * si una está invertida, esta constante lo tapa aquí pero el problema sigue
+     * vivo en otro lado.
+     */
+    public static final double shootWhileMovingAimSign = 1.0;
 
     /**
      * Iteraciones de convergencia.
@@ -942,6 +1132,59 @@ public class DemoConstants {
      * torreta se iría a apuntar a un punto absurdo.
      */
     public static final double shootWhileMovingMaxCompensationMeters = 2.5;
+
+    /**
+     * Tope de la corrección, ahora en ÁNGULO.
+     *
+     * <p>
+     * El tope en metros no alcanza como red de seguridad, porque el mismo
+     * desplazamiento del punto de mira son muy distintos ángulos según qué tan
+     * lejos estés: 2.5 m son ~15° a 9 m de distancia, pero más de 60° a 2 m. Sin
+     * este segundo tope, una corrección "chica" en metros puede mandar la
+     * torreta a medio campo cuando estás pegado al HUB.
+     *
+     * <p>
+     * 20° es holgado para el disparo en movimiento real —a 3 m/s y medio segundo
+     * de vuelo, a 5 m del HUB, la corrección teórica ronda los 17°— y sigue
+     * siendo un tope que se nota si algo sale mal.
+     */
+    public static final double shootWhileMovingMaxAimOffsetRad = Math.toRadians(20.0);
+
+    /**
+     * Filtro de la velocidad de campo. 1.0 = sin filtrar.
+     *
+     * <p>
+     * La velocidad sale de los estados de los módulos y trae ruido de encoders y
+     * patinado. Sin filtrar, ese ruido llega al hood, al flywheel y al ángulo de
+     * la torreta convertido en comandos nuevos cada 20 ms.
+     *
+     * <p>
+     * A 50 Hz, la constante de tiempo es {@code 0.02/alpha} segundos: 0.2 son
+     * ~100 ms, 0.4 son ~50 ms. Se busca el punto donde se limpia el ruido y se
+     * sigue estando muy por debajo de lo que tarda el robot en cambiar de
+     * dirección de verdad. Si la compensación tiembla, bájalo; si se siente
+     * retrasada al arrancar y frenar, súbelo.
+     */
+    public static final double fieldVelocityFilterAlpha = 0.2;
+
+    /**
+     * Deadband del setpoint del hood, en grados.
+     *
+     * <p>
+     * Es el mismo razonamiento que {@code turretSetpointDeadbandRad}, que la
+     * torreta ya tenía y el hood no: <b>cada setpoint nuevo reinicia el perfil de
+     * Motion Magic.</b> Re-comandar a 50 Hz con cambios de milésimas de grado
+     * hace que el perfil nunca se complete y el mecanismo tiemble en su lugar.
+     *
+     * <p>
+     * Sin el disparo en movimiento casi no se notaba, porque la distancia por
+     * odometría cambia despacio. Con la compensación encendida la distancia se
+     * mueve con la velocidad del robot, y sin este deadband el hood baila.
+     */
+    public static final double hoodSetpointDeadbandDeg = 0.25;
+
+    /** Deadband del setpoint del flywheel, en RPS. Misma razón que el hood. */
+    public static final double flywheelSetpointDeadbandRPS = 0.25;
 
     /**
      * Tiempo de vuelo de la pelota por distancia, en segundos.
@@ -966,11 +1209,11 @@ public class DemoConstants {
      */
     public static final InterpolatingDoubleTreeMap kTimeOfFlightMap = new InterpolatingDoubleTreeMap();
     static {
-        kTimeOfFlightMap.put(1.0, 0.35);
-        kTimeOfFlightMap.put(2.0, 0.48);
-        kTimeOfFlightMap.put(3.0, 0.62);
-        kTimeOfFlightMap.put(4.0, 0.76);
-        kTimeOfFlightMap.put(5.0, 0.90);
+        kTimeOfFlightMap.put(1.0, 0.40);
+        kTimeOfFlightMap.put(2.0, 0.53);
+        kTimeOfFlightMap.put(3.0, 0.67);
+        kTimeOfFlightMap.put(4.0, 0.81);
+        kTimeOfFlightMap.put(5.0, 0.95);
     }
 
     // ════════════════════════════════════════════════════════════════════════

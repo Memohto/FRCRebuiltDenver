@@ -5,7 +5,9 @@ import org.littletonrobotics.junction.Logger;
 import edu.wpi.first.math.geometry.Rotation2d;
 import edu.wpi.first.math.interpolation.InterpolatingDoubleTreeMap;
 import edu.wpi.first.math.util.Units;
+import edu.wpi.first.wpilibj.DriverStation;
 import edu.wpi.first.wpilibj2.command.SubsystemBase;
+import frc.robot.constants.DemoConstants;
 import frc.robot.constants.ShooterConstants;
 import frc.robot.subsystems.shooter.ShooterIO.ShooterIOInputsAutoLogged;
 
@@ -24,6 +26,27 @@ public class Shooter extends SubsystemBase {
      */
     protected String logKey = "Shooter";
 
+    /**
+     * Últimos setpoints comandados, para no re-comandar cambios insignificantes.
+     *
+     * <p>
+     * <b>Cada setpoint nuevo reinicia el perfil de Motion Magic del hood.</b>
+     * Re-comandar a 50 Hz con cambios de milésimas de grado hace que el perfil
+     * nunca se complete y el mecanismo tiemble en su lugar — es el mismo
+     * problema que la torreta ya resolvía con {@code turretSetpointDeadbandRad}
+     * y que aquí faltaba.
+     *
+     * <p>
+     * Se vuelve importante con el disparo en movimiento: sin compensación la
+     * distancia cambia despacio, con compensación se mueve con la velocidad del
+     * robot y el hood bailaría.
+     *
+     * <p>
+     * Arrancan en NaN para que el primer comando de cada uno siempre pase.
+     */
+    private double lastHoodDeg = Double.NaN;
+    private double lastFlywheelRadPerSec = Double.NaN;
+
     public Shooter(ShooterIO io) {
         this.io = io;
     }
@@ -32,6 +55,14 @@ public class Shooter extends SubsystemBase {
     public void periodic() {
         io.updateInputs(inputs);
         Logger.processInputs(logKey, inputs);
+
+        // Deshabilitado se olvida lo último comandado. Si el motor se reinició
+        // por un brownout, su setpoint interno ya no es el que creemos, y sin
+        // esto el deadband se lo tragaría por pedir "el mismo" número.
+        if (DriverStation.isDisabled()) {
+            lastHoodDeg = Double.NaN;
+            lastFlywheelRadPerSec = Double.NaN;
+        }
 
         // Log error between target and actual for tuning kV/kP
         double velocityError = inputs.flywheelTargetVelocityRadPerSec - inputs.flywheelVelocityRadPerSec;
@@ -47,6 +78,23 @@ public class Shooter extends SubsystemBase {
      * This is what you should use for all shooting during matches.
      */
     public void setFlywheelVelocity(double velocityRadPerSec) {
+        if (!Double.isFinite(velocityRadPerSec)) {
+            return; // Un NaN aquí es un comando sin sentido para el motor.
+        }
+        if (velocityRadPerSec == 0.0) {
+            // Apagar nunca se filtra. Hoy todos los paros pasan por
+            // stopFlywheel(), pero un deadband que se pueda tragar un cero es
+            // una trampa esperando a que alguien llame a este método directo.
+            lastFlywheelRadPerSec = 0.0;
+            io.setFlywheelVelocity(0.0);
+            return;
+        }
+        double deadbandRadPerSec =
+                Units.rotationsToRadians(DemoConstants.flywheelSetpointDeadbandRPS);
+        if (Math.abs(velocityRadPerSec - lastFlywheelRadPerSec) < deadbandRadPerSec) {
+            return;
+        }
+        lastFlywheelRadPerSec = velocityRadPerSec;
         io.setFlywheelVelocity(velocityRadPerSec);
     }
 
@@ -60,7 +108,9 @@ public class Shooter extends SubsystemBase {
     public void setFlywheelVelocityForDistance(double distanceMeters) {
         double velocityRPS = ShooterConstants.kShooterFlywheelMap.get(distanceMeters);
         double velocityRadPerSec = Units.rotationsToRadians(velocityRPS);
-        Logger.recordOutput("Shooter/FlywheelTargetRPS", velocityRPS);
+        // logKey y no "Shooter" a secas: si no, la torreta pisa la clave del
+        // cañón fijo y en el log no se sabe cuál de los dos pidió qué.
+        Logger.recordOutput(logKey + "/FlywheelTargetRPS", velocityRPS);
         setFlywheelVelocity(velocityRadPerSec);
     }
 
@@ -69,17 +119,21 @@ public class Shooter extends SubsystemBase {
      * Battery-dependent — do not use during matches.
      */
     public void setFlywheelOpenLoop(double speed) {
+        // Salir de lazo cerrado invalida el setpoint recordado: el siguiente
+        // comando de velocidad tiene que llegar al motor aunque pida el mismo
+        // número que la última vez.
+        lastFlywheelRadPerSec = Double.NaN;
         io.setFlywheelOpenLoop(speed);
     }
 
     /** @deprecated Use setFlywheelVelocityForDistance() instead for battery-independent shooting. */
     @Deprecated
     public void setFlywheelSpeed(double speed) {
-        io.setFlywheelOpenLoop(speed);
+        setFlywheelOpenLoop(speed);
     }
 
     public void stopFlywheel() {
-        io.setFlywheelOpenLoop(0.0);
+        setFlywheelOpenLoop(0.0);
     }
 
     /**
@@ -98,10 +152,27 @@ public class Shooter extends SubsystemBase {
     // ── Hood ─────────────────────────────────────────────────────────────────
 
     public void setHoodOpenLoop(double speed) {
+        lastHoodDeg = Double.NaN;
         io.setHoodOpenLoop(speed);
     }
 
+    /**
+     * Comanda el hood, saltándose los cambios insignificantes.
+     *
+     * <p>
+     * Es el único embudo hacia {@code io.setHoodPosition}, así que el deadband
+     * protege a todos los que comanden el hood, vengan del mapa que vengan.
+     */
     public void setHoodPosition(Rotation2d rotation) {
+        double degrees = rotation.getDegrees();
+        if (!Double.isFinite(degrees)) {
+            return;
+        }
+        if (Math.abs(degrees - lastHoodDeg) < DemoConstants.hoodSetpointDeadbandDeg) {
+            return;
+        }
+        lastHoodDeg = degrees;
+        Logger.recordOutput(logKey + "/HoodTargetDeg", degrees);
         io.setHoodPosition(rotation);
     }
 
@@ -111,7 +182,7 @@ public class Shooter extends SubsystemBase {
     }
 
     public void setHoodAtInitialPosition() {
-        io.setHoodPosition(new Rotation2d());
+        setHoodPosition(Rotation2d.kZero);
     }
 
     // ══════════════════════════════════════════════════════════════════════════

@@ -311,6 +311,23 @@ public class DemoDriveCommands {
                 visionError = turret.getAngleRad() - vision.getTargetXRad(TURRET_CAMERA);
             }
 
+            // ── Disparo en movimiento ─────────────────────────────────────
+            // El MISMO delta que usa la torreta. Se aplica después de la fusión,
+            // no antes, para que el sesgo siga midiendo lo que debe medir: la
+            // diferencia entre visión y odometría apuntando al objetivo REAL. Si
+            // se lo sumáramos antes, la compensación entraría en las dos fuentes
+            // y se cancelaría en la resta, pero ensuciaría el filtro del sesgo
+            // cada vez que el robot acelera.
+            // Gateado igual que en la torreta: la compensación se calcula contra
+            // el HUB, así que sólo vale cuando al HUB le estamos apuntando.
+            double aimOffsetRad = DemoState.isHubTargeting()
+                    ? ShotSolution.compute(
+                            drive.getPose(),
+                            drive.getFieldRelativeVelocity(),
+                            FieldTracking.getActiveTarget()).aimOffsetRad
+                    : 0.0;
+            Logger.recordOutput("Demo/Bomber/AimOffsetDeg", Math.toDegrees(aimOffsetRad));
+
             // ── Fusión ────────────────────────────────────────────────────
             double rawError;
             if (visionError != null) {
@@ -345,7 +362,7 @@ public class DemoDriveCommands {
             }
 
             // ── Slew del rumbo objetivo ───────────────────────────────────
-            double desiredTarget = currentHeading + rawError;
+            double desiredTarget = currentHeading + rawError + aimOffsetRad;
             if (Double.isNaN(targetHeadingRad)) {
                 targetHeadingRad = desiredTarget;
             } else {

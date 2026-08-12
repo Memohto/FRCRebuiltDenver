@@ -107,9 +107,29 @@ public class Turret extends Shooter {
   }
 
   public static double computeTurretAngleRad(Pose2d robotPose, Translation2d fieldTarget) {
+    return computeTurretAngleRad(robotPose, fieldTarget, 0.0);
+  }
+
+  /**
+   * Ángulo de torreta para apuntar a un punto del campo, con una corrección.
+   *
+   * <p>
+   * La corrección (disparo en movimiento) entra <b>antes</b> del envolvimiento y
+   * del clamp, no después. Esa es toda la razón de que exista esta sobrecarga: el
+   * recorrido de la torreta es de 360° justos, así que el ángulo se envuelve a
+   * una costura. Sumar la corrección después del envolvimiento hace que un
+   * objetivo cerca de la costura sature contra el soft limit en vez de dar la
+   * vuelta — perdiendo hasta el tope de compensación completo, y justo ahí
+   * dejaría de coincidir con la rama de visión, que es lo que este diseño existe
+   * para evitar.
+   *
+   * @param aimOffsetRad Corrección en radianes CCW, en el marco del campo.
+   */
+  public static double computeTurretAngleRad(
+      Pose2d robotPose, Translation2d fieldTarget, double aimOffsetRad) {
     double dx = fieldTarget.getX() - robotPose.getX();
     double dy = fieldTarget.getY() - robotPose.getY();
-    double worldAngle = Math.atan2(dy, dx);
+    double worldAngle = Math.atan2(dy, dx) + aimOffsetRad;
     double robotHeading = robotPose.getRotation().getRadians();
 
     double rawAngle = worldAngle - robotHeading - TurretConstants.turretZeroOffsetRad;

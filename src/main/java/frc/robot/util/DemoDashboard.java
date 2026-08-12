@@ -36,7 +36,27 @@ public class DemoDashboard {
 
     public static int tagId = -1;
     public static double distanceMeters = 0.0;
+    /**
+     * Cuánto le FALTA girar a la torreta, en grados, positivo en sentido CCW.
+     *
+     * <p>
+     * Es la misma convención en las dos ramas de apuntado —visión y odometría—,
+     * así que el número no cambia de signo solo cuando el tag aparece o se
+     * pierde. Ojo si vienen de la versión anterior: la rama de visión reportaba
+     * {@code tx} crudo, que tiene el signo contrario.
+     */
     public static double turretErrorDeg = 0.0;
+
+    /**
+     * Sesgo aprendido entre el apuntado por visión y el por odometría, en grados.
+     *
+     * <p>
+     * Es cuánto se equivoca la pose del robot vista desde la torreta. Unos pocos
+     * grados es normal. Si crece mucho o no para de moverse, la pose o la
+     * calibración de la cámara están mal y vale la pena revisarlas antes de
+     * confiar en el apuntado sin ver el tag.
+     */
+    public static double turretBiasDeg = 0.0;
 
     /** "SUAVE" / "COMPETENCIA" / "VOLCADO x%" / "—". */
     public static String shotPower = "—";
@@ -61,6 +81,33 @@ public class DemoDashboard {
      * moverte lateralmente debe crecer proporcional a tu velocidad.
      */
     public static double shotCompensationMeters = 0.0;
+
+    /**
+     * Corrección angular del shoot-while-move, en grados.
+     *
+     * <p>
+     * Es la que de verdad mueve la torreta, ya gateada: si el apuntado no la
+     * está aplicando, aquí sale 0.
+     *
+     * <p>
+     * Parado debe ser 0. Dándole la cara al HUB y manejando <b>a la derecha</b>
+     * debe crecer <b>positivo</b> — positivo es CCW, o sea que el apuntado se
+     * corre a la izquierda, contra tu movimiento, que es lo que dice la física.
+     * Si crece negativo, el signo está invertido: ver
+     * {@code shootWhileMovingAimSign}.
+     */
+    public static double shotAimOffsetDeg = 0.0;
+
+    /**
+     * Rapidez del robot en marco de campo, m/s.
+     *
+     * <p>
+     * Es el contexto sin el cual los otros dos números no se pueden leer: la
+     * compensación tiene que ser proporcional a esto. Parado, cero; y si a 1 m/s
+     * la compensación no llega ni a un grado, el problema es la ganancia, no el
+     * signo.
+     */
+    public static double fieldSpeedMetersPerSec = 0.0;
 
     /**
      * Sesgo aprendido entre el rumbo de visión y el de odometría, en grados.
@@ -97,6 +144,7 @@ public class DemoDashboard {
         tagId = -1;
         distanceMeters = 0.0;
         turretErrorDeg = 0.0;
+        turretBiasDeg = 0.0;
         shotPower = "—";
         creepActive = false;
         headingAssisted = false;
@@ -104,6 +152,8 @@ public class DemoDashboard {
         followDistanceMeters = 0.0;
         alignSource = "—";
         shotCompensationMeters = 0.0;
+        shotAimOffsetDeg = 0.0;
+        fieldSpeedMetersPerSec = 0.0;
         alignBiasDeg = 0.0;
     }
 
@@ -168,7 +218,12 @@ public class DemoDashboard {
         SmartDashboard.putBoolean("Demo/Volcado libre", DemoState.isSmoothDump());
         SmartDashboard.putNumber(
                 "Demo/Compensacion mov m", round(shotCompensationMeters, 2));
+        SmartDashboard.putNumber(
+                "Demo/Compensacion mov deg", round(shotAimOffsetDeg, 1));
+        SmartDashboard.putNumber("Demo/Sesgo torreta deg", round(turretBiasDeg, 1));
         SmartDashboard.putNumber("Demo/Sesgo rumbo deg", round(alignBiasDeg, 1));
+        SmartDashboard.putNumber(
+                "Demo/Velocidad campo mps", round(fieldSpeedMetersPerSec, 2));
         SmartDashboard.putBoolean("Demo/Odometria fresca", FieldTracking.isOdometryValid());
         SmartDashboard.putNumber(
                 "Demo/Sin ver tag s", round(Math.min(FieldTracking.secondsSinceUpdate(), 99.0), 1));
