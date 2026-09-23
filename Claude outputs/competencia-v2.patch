@@ -1,0 +1,3922 @@
+diff --git a/COMPETENCIA_V2.md b/COMPETENCIA_V2.md
+new file mode 100644
+index 0000000..a18528b
+--- /dev/null
++++ b/COMPETENCIA_V2.md
+@@ -0,0 +1,391 @@
++# Tequila 4.0 — Competencia v2
++
++Guía de operación, configuración y tuning del robot de partido.
++FRC 6702 Stingbots · Off-season 2026 · Limelight 4 fija en el cañón
++
++---
++
++## 1. Qué es esto
++
++El código de Denver seguía funcionando, pero tenía tres cosas que ya habíamos
++resuelto en el demo del StingyCamp y nunca migramos:
++
++| Problema en Denver | Qué se hizo |
++|---|---|
++| El orbit era "muy violento": el PID de rumbo multiplicaba su salida por ~20 rad/s y saturaba | `HeadingController`: PD suave con la salida ya en rad/s, compuerta suave y derivativo filtrado |
++| La torreta temblaba: se re-comandaba a 50 Hz con kI acumulando | `TurretAimTracker`: filtro + slew + deadband de comando; ganancias sin integral |
++| El chasis respondía a jalones del stick con jalones de corriente | `SmoothDriveFilter` a velocidad de partido (100 %, precisión al 30 % con LT) |
++
++Además:
++
++- **Un solo estado de modos** (`CompetitionState`): STRIKER/BOMBER y HUB/FEEDER,
++  en vez de tres enums estáticos que se pisaban desde cuatro botones.
++- **Solución de tiro compartida** (`ShotSolution`): torreta, cañón fijo y chasis
++  apuntan al mismo punto por construcción, con disparo en movimiento.
++- **Limelight 4 fija** con su IMU interna para MegaTag2 y throttle térmico.
++- **Agitación automática** de la caja al alimentar y **extensión con remate
++  por corriente** (el intake sale completo aunque la calibración se corra).
++- **Cámara de piloto** (la HBVCAM por USB) en Elastic.
++
++Nada del demo se borró: `RobotConstants.isDemoMode = true` lo devuelve. Y los
++bindings originales de Denver siguen en `RobotContainer.configureDenverBindings()`
++(`useDenverBindings = true` los carga).
++
++### Archivos nuevos
++
++| Archivo | Qué es |
++|---|---|
++| `constants/CompetitionConstants.java` | Todo lo ajustable del modo partido |
++| `constants/ShotConstants.java` | Física del tiro compartida por demo y competencia (tiempo de vuelo, disparo en movimiento, deadbands) |
++| `util/CompetitionState.java` | STRIKER/BOMBER · HUB/FEEDER · objetivo activo |
++| `util/HeadingController.java` | PD de rumbo suave |
++| `util/TurretAimTracker.java` | Setpoints suaves de torreta |
++| `util/MatchDashboard.java` | Publicación a Elastic (`Match/...`) |
++| `commands/competition/CompDriveCommands.java` | Smooth drive + rumbo asistido en BOMBER |
++| `commands/competition/CompTurretCommands.java` | Torreta por odometría + carga |
++| `commands/competition/CompShooterCommands.java` | Cañón fijo en BOMBER |
++| `commands/IntakeCommands.java` | Agitación y remate por corriente (ahora compartidos) |
++
++### Archivos que cambiaron
++
++- `RobotConstants` — `isDemoMode = false`, enum `CompetitionTarget`.
++- `RobotContainer` — cableado de la LL4 fija, `configureCompetitionBindings()`.
++- `Robot` — `MatchDashboard`, `CompetitionState.reset()` en teleop, cámara de piloto.
++- `VisionConstants` — transformada de la LL4, modos de IMU, throttle.
++- `Vision` / `VisionIOLimelight` — gestión del modo de IMU según el estado del robot.
++- `TurretIOTalonFX` — ganancias v2 (sin kI) cuando `useV2TurretGains = true`.
++- `Shooter`, `Drive`, `ShotSolution`, `FieldTracking` — leen de `ShotConstants`.
++- `IntakeConstants` — constantes de agitación.
++- `DemoConstants` — ahora **re-exporta** las constantes compartidas (no las edites ahí: son alias `final`).
++- `elastic-layout.json` — pestaña **Competencia** nueva.
++
++---
++
++## 2. Flujo de operación
++
++Es el del demo. Nada se mueve hasta que alguien lo pide.
++
++```
++1. SELECCIONAR MODO        (operador, Y)      STRIKER ↔ BOMBER
++   SELECCIONAR OBJETIVO    (operador, Back)   HUB ↔ FEEDER
++     No mueve nada. Sólo define qué hará el gatillo.
++
++2. APUNTAR (X)  o  CARGAR (RT)
++     X  → STRIKER: la torreta rastrea el objetivo por odometría.
++          BOMBER:  la torreta va a cero y el CHASIS se alinea solo.
++          Los flywheels NO giran.
++     RT → lo mismo + hood y flywheel a la solución de tiro. Es "el gatillo".
++
++3. ALIMENTAR               (operador, LB / RB — la Y-valve)
++     LB = cañón fijo, RB = torreta, los dos = ambos.
++     Mientras alimentas, la caja se agita sola.
++
++Soltar todo → torreta a cero, flywheels apagados.
++```
++
++**Al dar enable el robot está en STRIKER → HUB.** `teleopInit` lo resetea a eso
++siempre, así que el operador elige otra cosa a propósito, no por herencia del
++partido anterior.
++
++### Los cuatro estados
++
++| Modo | Objetivo | Quién apunta | Quién dispara |
++|---|---|---|---|
++| STRIKER | HUB | Torreta | Torreta |
++| STRIKER | FEEDER | Torreta (hacia la pared de la alianza) | Torreta |
++| BOMBER | HUB | Chasis (trasera al HUB) | Los dos cañones |
++| BOMBER | FEEDER | Chasis (trasera a la pared) | Los dos cañones |
++
++BOMBER es el modo de volumen: dos cañones a la misma distancia. STRIKER es el
++modo de "voy manejando y la torreta se encarga".
++
++---
++
++## 3. Mapa de controles
++
++> Imprime esta sección y pégala en la caja del driveteam.
++
++### Piloto — puerto 0
++
++| Control | Acción |
++|---|---|
++| Stick izquierdo | Traslación. Field-relative con flip por alianza |
++| Stick derecho | Giro. En BOMBER, mientras el operador apunta, el chasis se alinea solo; **mover el stick más de la mitad lo cancela** (válvula de escape) |
++| LT | Modo precisión: 30 % |
++| B | Reset del frente (0° azul / 180° rojo). Sirve deshabilitado |
++
++### Operador — puerto 1
++
++| Control | Acción |
++|---|---|
++| Y | STRIKER ↔ BOMBER |
++| Back | HUB ↔ FEEDER |
++| X (hold) | APUNTAR |
++| RT (hold) | CARGAR |
++| LB / RB | Alimentar cañón fijo / torreta (+ agitación automática) |
++| LT | Rodillos de intake |
++| A (hold) | Extender intake con remate por corriente |
++| B (hold) | Retraer intake |
++| POV ↓ | Agitar la caja a mano |
++| POV → | Desatascar indexer (reversa) |
++| POV ↑ | Prueba de flywheels al 25 % (pit) |
++| LS / RS | Jog del extensor **sin soft limits** (sólo recalibración) |
++| Start | Libre |
++
++---
++
++## 4. Cómo apunta ahora
++
++### La torreta apunta por pose, no por cámara
++
++En Denver la Limelight estaba fija y la torreta apuntaba por odometría. Eso
++**no cambió**; lo que cambió es cómo llega el ángulo al motor:
++
++```
++pose (encoders + Pigeon + MegaTag2)
++  → ShotSolution.compute(pose, velocidad, objetivo)     ← distancia + delta angular
++  → Turret.computeTurretAngleRad(pose, objetivo, delta) ← envuelve y recorta
++  → TurretAimTracker: filtro → slew → deadband           ← lo que evita el temblor
++  → rotateToAngle()
++```
++
++La visión **no** cierra ningún lazo sobre la torreta. Con MegaTag2 corrigiendo la
++pose a 30+ fps, la odometría *es* la verdad y no hay "sesgo" que aprender como
++en el demo (ahí la cámara iba en la torreta y la pose casi no se corregía). Si
++la torreta apunta mal, el problema está en la pose o en la transformada de la
++cámara, no en la torreta — ver sección 8.
++
++### El chasis en BOMBER
++
++Mismo principio: rumbo al objetivo + 180° (los cañones miran hacia atrás) + la
++misma compensación de movimiento que usa la torreta. El rumbo objetivo tiene
++slew (`headingTargetSlewRadPerSec`) para que una pose basura de un ciclo no
++mande al robot a dar la vuelta, y muy cerca del objetivo se congela el último
++rumbo bueno.
++
++### Disparo en movimiento
++
++`ShotSolution` corre el punto de mira en dirección contraria a la velocidad del
++robot:
++
++```
++objetivoVirtual = objetivoReal − velocidad × tiempoDeVuelo
++```
++
++Resuelve ángulo y distancia a la vez. **Quedó encendido** desde la última
++iteración del demo (`ShotConstants.shootWhileMovingEnabled = true`, ganancia
++1.0). Antes de competir hay que verificarlo — sección 6.
++
++---
++
++## 5. Limelight 4
++
++### Montaje
++
++Va en el cañón fijo, mirando hacia **atrás** (por donde salen las pelotas). En
++BOMBER, con la trasera al HUB, ve los tags del HUB de frente; en STRIKER ve lo
++que haya detrás del robot. Como la torreta apunta por pose, la LL sólo tiene
++que ver *algún* tag del campo de vez en cuando para mantener la odometría
++corregida.
++
++### Transformada
++
++`VisionConstants.robotToLimelightFixed` se publica al arrancar
++(`camerapose_robotspace_set`). **La pose de cámara en la web UI debe quedar en
++ceros**; si dejas valores ahí se suman. Si prefieres configurarla en la web UI
++como en Denver, pon `publishFixedCameraTransform = false`.
++
++Los valores actuales son una estimación: `(-0.25, 0, 0.25)` m, pitch −20°
++(mirando hacia arriba), yaw 180°. **Hay que medirlos** (sección 9).
++
++### IMU
++
++| Estado | `imumode_set` | Qué hace |
++|---|---|---|
++| Deshabilitado | 1 | Toma el yaw del Pigeon (`robot_orientation_set`) y siembra su IMU interna |
++| Habilitado | 4 | Usa su IMU interna (menos latencia en giros) con el Pigeon como asistencia lenta |
++
++Si la pose de visión se va girando sola estando quieto, cambia
++`limelight4ImuModeEnabled` a 0 (sólo Pigeon, como la LL2).
++
++### Throttle térmico
++
++Deshabilitado salta 150 frames entre procesados (`limelight4ThrottleDisabled`);
++habilitado procesa todos. La LL4 consume 12 W y en el pit se calienta.
++
++### Pipeline
++
++Un solo pipeline de AprilTags (0) a la resolución que dé ≥ 30 fps con los tags
++del HUB detectados desde media cancha. En la LL4 eso suele ser 1280x960 con
++decimate 2, o 960x720 con decimate 1. **Verifica `Match/Latencia ms` < 40** con
++el robot en cancha.
++
++---
++
++## 6. Procedimiento de tuning
++
++En orden. Cada paso depende del anterior.
++
++### 6.1 Pose (primero, porque todo lo demás depende de esto)
++
++1. Robot quieto en cancha viendo un tag del HUB. En AdvantageScope:
++   `Vision/Camera0/RobotPosesAccepted` debe caer encima de `Odometry/Robot`.
++2. Si la pose de visión está **corrida un offset fijo** → la traslación de la
++   cámara está mal (`robotToLimelightFixed`, X/Y/Z).
++3. Si la pose de visión **se mueve al girar el robot en su lugar** → el yaw
++   está mal.
++4. Si está bien quieto pero **se va al manejar** → latencia: revisa que el
++   pipeline dé ≥ 30 fps.
++5. Presiona B (reset de frente) y maneja: `Odometry/Robot` debe seguir al robot
++   real sin brincos cuando aparece un tag.
++
++### 6.2 Torreta
++
++1. STRIKER → HUB, mantén X. `Match/Torreta` debe decir "HUB por odometría" y
++   `Match/Error torreta deg` acercarse a 0 sin oscilar.
++2. Si **tiembla en sitio** → sube `turretSetpointDeadbandRad`.
++3. Si **se queda atrás al manejar** → sube `turretSetpointFilterAlpha` (más
++   cerca de 1.0) o `turretMaxSetpointRateRadPerSec`.
++4. Si **oscila alrededor del objetivo** → baja `turretGains.kP` o sube `kD`.
++5. Si **apunta a un lado fijo** del HUB → la pose está corrida (6.1), no la
++   torreta.
++
++### 6.3 Rumbo de BOMBER
++
++1. BOMBER → HUB, mantén X con el stick de giro suelto. El chasis debe girar
++   hasta poner la trasera al HUB y quedarse ahí.
++2. **Se pasa y regresa** → baja `headingKp` o sube `headingKd`.
++3. **Se queda corto** (no llega a cero) → baja `headingToleranceRad` o sube
++   `headingKp`.
++4. **Vibra en el setpoint** → sube `headingToleranceRad` o `headingSoftZoneRad`.
++5. **Muy lento** → sube `headingMaxOmegaRadPerSec` (tope 8).
++
++### 6.4 Disparo en movimiento
++
++Empieza con `shootWhileMovingEnabled = false` si vas a tirar estático el primer
++día; enciéndelo cuando el tiro parado ya caiga.
++
++1. Mide `kTimeOfFlightMap`: graba un tiro estático a 60 fps desde el costado,
++   cuenta cuadros entre que la pelota sale y toca el HUB, divide entre 60.
++   Repite a 2, 3, 4 y 5 m.
++2. **Sin disparar**: STRIKER → HUB, mantén X, maneja **lateralmente a la
++   derecha** viendo al HUB. `Match/Compensacion mov deg` debe ser **0 parado**
++   y crecer **positivo** proporcional a `Match/Velocidad campo mps`.
++   - Positivo → signo correcto.
++   - Negativo → `shootWhileMovingAimSign = -1.0`.
++   - No crece → revisa `Drive/FieldVelocityFiltered` en el log.
++3. Ya con el número sano, dispara moviéndote. Si los tiros se corrigen pero
++   quedan cortos, sube `shootWhileMovingGain` de 0.2 en 0.2.
++4. Si el hood zumba → sube `hoodSetpointDeadbandDeg`; si la corrección tiembla
++   → baja `fieldVelocityFilterAlpha`.
++
++### 6.5 Intake
++
++- **No sale completo** → el remate por corriente lo resuelve; si no, sube
++  `extendedRotation` **y** `extensorForwardLimitRad`.
++- **El remate termina de inmediato** → `stallCurrentAmps` muy bajo (confunde el
++  pico de arranque con el tope). Súbelo o sube `stallDebounceSeconds`.
++- **Las pelotas hacen puente** → `agitateAmplitudeRad` o `agitateFrequencyHz`.
++
++---
++
++## 7. Checklist antes de un partido
++
++**En el taller**
++
++- [ ] `RobotConstants.isDemoMode = false`, `useDenverBindings = false`
++- [ ] `./gradlew build` sin errores (el código se escribió sin compilar — ver sección 10)
++- [ ] LL4: hostname `limelight-fixed`, pose de cámara en **ceros** en la web UI, pipeline 0 de AprilTags, LEDs apagados
++- [ ] `VisionConstants.robotToLimelightFixed` medida (6.1)
++- [ ] Prueba de inactividad: **habilita sin tocar nada — la torreta no debe moverse**
++- [ ] Prueba STRIKER: mantén X, la torreta sigue el HUB al manejar sin temblar
++- [ ] Prueba BOMBER: mantén X, el chasis se alinea; mover el stick fuerte lo cancela
++- [ ] `Match/LISTO PARA TIRAR` se pone verde al cargar parado a 3 m
++- [ ] `shootWhileMovingEnabled` verificado (6.4) o apagado
++- [ ] Autos cargados en el chooser; cada uno probado al menos una vez
++- [ ] Layout de Elastic cargado (`Ctrl + D` → "Load Layout From Robot"), pestaña **Competencia**
++- [ ] Cámara de piloto visible en Elastic (widget "Piloto")
++- [ ] Memoria USB montada para los logs
++
++**En la cola de partido**
++
++- [ ] Alianza correcta en la DS (el flip de campo y el HUB dependen de eso)
++- [ ] Robot orientado hacia adelante y **B** presionado
++- [ ] `Match/Limelight OK` en verde
++- [ ] Auto seleccionado en el chooser
++
++---
++
++## 8. Diagnóstico
++
++| Síntoma | Dónde mirar |
++|---|---|
++| La torreta no hace nada | Correcto si no mantienes X o RT |
++| La torreta apunta a un lado fijo del HUB | Pose corrida. `Vision/Camera0/RobotPosesAccepted` vs `Odometry/Robot`. Sección 6.1 |
++| La torreta se rezaga al manejar | `turretSetpointFilterAlpha` ↑ o `turretMaxSetpointRateRadPerSec` ↑ |
++| La torreta tiembla | `turretSetpointDeadbandRad` ↑. Si oscila con amplitud, kP ↓ |
++| "ODOMETRIA VIEJA" en el estado | Más de 8 s sin un tag aceptado. La torreta sigue apuntando; revisa `Match/Tag a la vista` y la exposición del pipeline |
++| BOMBER no gira el chasis | ¿Estás manteniendo X o RT? ¿El stick de giro está más de la mitad? `Match/Fuente rumbo` en MANUAL (piloto) = lo cancelaste tú |
++| BOMBER gira al lado contrario / se queda a 180° | El objetivo es rumbo + 180° porque los cañones miran atrás. Si el robot cambió de geometría, revisa `Rotation2d.k180deg` en `TargetHeading` |
++| El hood no se mueve al cargar | `Match/Distancia m`: si marca < 1 m lejos del HUB, la pose no está inicializada. Presiona B y deja que vea un tag |
++| Los dos hoods marcan distinto en BOMBER | No debería: comparten `ShotSolution`. Revisa que ningún comando viejo (`ShooterCommands`/`TurretCommands`) esté enlazado |
++| La compensación se va al revés | Sección 6.4, paso 2. Mira el signo ANTES de tocar `shootWhileMovingAimSign` |
++| El intake no sale completo | `extendedRotation` + `extensorForwardLimitRad`, o deja que el remate lo resuelva |
++| La pose de visión gira sola quieto | `limelight4ImuModeEnabled = 0` |
++| Latencia > 60 ms | Baja resolución o sube decimate en el pipeline |
++| Sin video de piloto | `CompetitionConstants.useDriverCamera`, y que la HBVCAM esté en el puerto USB del Rio (dev 0) |
++| El robot se siente "flotado" al arrancar | `translationMaxAccel` ↑ |
++| Las llantas patinan al arrancar | `translationMaxAccel` ↓ |
++
++---
++
++## 9. Calibrar la geometría de la Limelight
++
++Cinta métrica y nivel digital.
++
++1. **Origen**: el centro del robot es el centro del cuadrado que forman las
++   cuatro ruedas (no el centro de los bumpers).
++2. **X**: distancia del origen al lente, positivo hacia adelante. La cámara
++   está atrás → negativo.
++3. **Y**: positivo hacia la izquierda del robot (visto desde atrás hacia
++   adelante).
++4. **Z**: altura del lente sobre el piso.
++5. **Pitch**: inclinación hacia arriba del lente, **negativa** en la convención
++   WPILib (−20° = mira 20° hacia arriba).
++6. **Yaw**: π (180°) porque mira hacia atrás. Si está ligeramente girada,
++   suma/resta ese ángulo.
++7. Prueba decisiva: sección 6.1.
++
++---
++
++## 10. Estado del código
++
++- Todos los archivos parsean sin errores de sintaxis (tree-sitter).
++- Cero referencias sin resolver a clases, constantes y métodos del proyecto
++  (verificación cruzada automática).
++- `elastic-layout.json` valida como JSON (3 pestañas).
++- **No se pudo compilar con Gradle**: el entorno no tiene acceso al Maven de
++  WPILib. **Corre `./gradlew build` antes de desplegar.** Lo más probable que
++  aparezca son imports sin usar (warnings) o alguna firma de WPILib que cambió
++  de nombre; los errores de lógica ya se revisaron.
++
++### Pendientes de verificar en el robot, en orden
++
++1. **`robotToLimelightFixed`** — medir (sección 9). Bloquea todo lo demás.
++2. **Pipeline de la LL4** — resolución/decimate para ≥ 30 fps, latencia < 40 ms.
++3. **Modo de IMU 4** — que la pose no gire sola; si sí, modo 0.
++4. **Torreta**: `turretGains` (kP 45 sin kI) y el deadband. Si prefieres
++   arrancar con lo de Denver, `useV2TurretGains = false`.
++5. **Rumbo de BOMBER**: `headingKp` 3.0 / `headingKd` 0.35.
++6. **Disparo en movimiento**: signo y ganancia (6.4). Apágalo si no hay tiempo.
++7. **Mapas de tiro** (`ShooterConstants.kShooterHoodMap` / `kShooterFlywheelMap`)
++   — son los de Denver, verificar que siguen cayendo con el robot actual.
++8. **Cámara de piloto**: ancho de banda en la DS < 3 Mbps con el stream abierto.
++
++### Qué NO cambió
++
++- Los autos de PathPlanner y sus `NamedCommands` (`AimTurret`, `IndexTurret`,
++  `ExtendIntake`, ...).
++- `IndexerCommands` (la Y-valve).
++- Los mapas de tiro de competencia.
++- El código del demo: sigue detrás de `isDemoMode = true`.
+diff --git a/DEMO_MODE_GUIA.md b/DEMO_MODE_GUIA.md
+index 19d1744..a36268d 100644
+--- a/DEMO_MODE_GUIA.md
++++ b/DEMO_MODE_GUIA.md
+@@ -479,7 +479,7 @@ todavía no está medido.
+    `Demo/Compensacion mov deg`: parado debe ser **0 exacto**, y al moverte debe
+    crecer proporcional a tu velocidad y hacia el lado al que te mueves.
+ 
+-   En el log hay dos claves y la diferencia importa: `Demo/Shot/AimOffsetDeg` es
++   En el log hay dos claves y la diferencia importa: `Shot/AimOffsetDeg` es
+    lo que la matemática **calculó**, y `Demo/Turret/AimOffsetDeg` es lo que la
+    torreta **aplicó**. En modo HUB deben ser idénticas; si no lo son, algo está
+    gateando la corrección. En caza libre la aplicada es 0 a propósito, porque el
+diff --git a/src/main/deploy/elastic-layout.json b/src/main/deploy/elastic-layout.json
+index caef44c..a6555dd 100644
+--- a/src/main/deploy/elastic-layout.json
++++ b/src/main/deploy/elastic-layout.json
+@@ -2,6 +2,341 @@
+   "version": 1.0,
+   "grid_size": 128,
+   "tabs": [
++    {
++      "name": "Competencia",
++      "grid_layout": {
++        "layouts": [],
++        "containers": [
++          {
++            "title": "Estado",
++            "x": 0.0,
++            "y": 0.0,
++            "width": 768.0,
++            "height": 128.0,
++            "type": "Large Text Display",
++            "properties": {
++              "topic": "/SmartDashboard/Match/Estado",
++              "period": 0.06
++            }
++          },
++          {
++            "title": "LISTO PARA TIRAR",
++            "x": 768.0,
++            "y": 0.0,
++            "width": 384.0,
++            "height": 256.0,
++            "type": "Boolean Box",
++            "properties": {
++              "topic": "/SmartDashboard/Match/LISTO PARA TIRAR",
++              "period": 0.06,
++              "true_color": 4283215696,
++              "false_color": 4287137928
++            }
++          },
++          {
++            "title": "Modo",
++            "x": 0.0,
++            "y": 128.0,
++            "width": 256.0,
++            "height": 128.0,
++            "type": "Large Text Display",
++            "properties": {
++              "topic": "/SmartDashboard/Match/Modo",
++              "period": 0.06
++            }
++          },
++          {
++            "title": "Objetivo",
++            "x": 256.0,
++            "y": 128.0,
++            "width": 256.0,
++            "height": 128.0,
++            "type": "Large Text Display",
++            "properties": {
++              "topic": "/SmartDashboard/Match/Objetivo",
++              "period": 0.06
++            }
++          },
++          {
++            "title": "Torreta",
++            "x": 512.0,
++            "y": 128.0,
++            "width": 256.0,
++            "height": 128.0,
++            "type": "Large Text Display",
++            "properties": {
++              "topic": "/SmartDashboard/Match/Torreta",
++              "period": 0.06
++            }
++          },
++          {
++            "title": "Torreta apuntada",
++            "x": 0.0,
++            "y": 256.0,
++            "width": 256.0,
++            "height": 128.0,
++            "type": "Boolean Box",
++            "properties": {
++              "topic": "/SmartDashboard/Match/Torreta apuntada",
++              "period": 0.06,
++              "true_color": 4283215696,
++              "false_color": 4287137928
++            }
++          },
++          {
++            "title": "Flywheels listos",
++            "x": 256.0,
++            "y": 256.0,
++            "width": 256.0,
++            "height": 128.0,
++            "type": "Boolean Box",
++            "properties": {
++              "topic": "/SmartDashboard/Match/Flywheels listos",
++              "period": 0.06,
++              "true_color": 4283215696,
++              "false_color": 4287137928
++            }
++          },
++          {
++            "title": "Odometria fresca",
++            "x": 512.0,
++            "y": 256.0,
++            "width": 256.0,
++            "height": 128.0,
++            "type": "Boolean Box",
++            "properties": {
++              "topic": "/SmartDashboard/Match/Odometria fresca",
++              "period": 0.06,
++              "true_color": 4283215696,
++              "false_color": 4287137928
++            }
++          },
++          {
++            "title": "Limelight OK",
++            "x": 768.0,
++            "y": 256.0,
++            "width": 192.0,
++            "height": 128.0,
++            "type": "Boolean Box",
++            "properties": {
++              "topic": "/SmartDashboard/Match/Limelight OK",
++              "period": 0.06,
++              "true_color": 4283215696,
++              "false_color": 4287137928
++            }
++          },
++          {
++            "title": "Tag a la vista",
++            "x": 960.0,
++            "y": 256.0,
++            "width": 192.0,
++            "height": 128.0,
++            "type": "Boolean Box",
++            "properties": {
++              "topic": "/SmartDashboard/Match/Tag a la vista",
++              "period": 0.06,
++              "true_color": 4283215696,
++              "false_color": 4287137928
++            }
++          },
++          {
++            "title": "Distancia m",
++            "x": 0.0,
++            "y": 384.0,
++            "width": 192.0,
++            "height": 128.0,
++            "type": "Text Display",
++            "properties": {
++              "topic": "/SmartDashboard/Match/Distancia m",
++              "period": 0.06
++            }
++          },
++          {
++            "title": "Error torreta deg",
++            "x": 192.0,
++            "y": 384.0,
++            "width": 192.0,
++            "height": 128.0,
++            "type": "Text Display",
++            "properties": {
++              "topic": "/SmartDashboard/Match/Error torreta deg",
++              "period": 0.06
++            }
++          },
++          {
++            "title": "Error rumbo deg",
++            "x": 384.0,
++            "y": 384.0,
++            "width": 192.0,
++            "height": 128.0,
++            "type": "Text Display",
++            "properties": {
++              "topic": "/SmartDashboard/Match/Error rumbo deg",
++              "period": 0.06
++            }
++          },
++          {
++            "title": "Chasis asistido",
++            "x": 576.0,
++            "y": 384.0,
++            "width": 192.0,
++            "height": 128.0,
++            "type": "Boolean Box",
++            "properties": {
++              "topic": "/SmartDashboard/Match/Chasis asistido",
++              "period": 0.06,
++              "true_color": 4283215696,
++              "false_color": 4287137928
++            }
++          },
++          {
++            "title": "Modo precision",
++            "x": 768.0,
++            "y": 384.0,
++            "width": 192.0,
++            "height": 128.0,
++            "type": "Boolean Box",
++            "properties": {
++              "topic": "/SmartDashboard/Match/Modo precision",
++              "period": 0.06,
++              "true_color": 4283215696,
++              "false_color": 4287137928
++            }
++          },
++          {
++            "title": "Cargando",
++            "x": 960.0,
++            "y": 384.0,
++            "width": 192.0,
++            "height": 128.0,
++            "type": "Boolean Box",
++            "properties": {
++              "topic": "/SmartDashboard/Match/Cargando",
++              "period": 0.06,
++              "true_color": 4283215696,
++              "false_color": 4287137928
++            }
++          },
++          {
++            "title": "Field",
++            "x": 0.0,
++            "y": 512.0,
++            "width": 768.0,
++            "height": 384.0,
++            "type": "Field",
++            "properties": {
++              "topic": "/SmartDashboard/Field",
++              "period": 0.06,
++              "field_game": "Rebuilt",
++              "robot_width": 0.85,
++              "robot_length": 0.85,
++              "show_other_objects": true,
++              "show_trajectories": true,
++              "field_rotation": 0.0,
++              "robot_color": 4294945792,
++              "trajectory_color": 4294967295
++            }
++          },
++          {
++            "title": "Auto Choices",
++            "x": 768.0,
++            "y": 512.0,
++            "width": 384.0,
++            "height": 128.0,
++            "type": "ComboBox Chooser",
++            "properties": {
++              "topic": "/SmartDashboard/Auto Choices",
++              "period": 0.06,
++              "sort_options": false
++            }
++          },
++          {
++            "title": "Compensacion mov deg",
++            "x": 768.0,
++            "y": 640.0,
++            "width": 192.0,
++            "height": 128.0,
++            "type": "Text Display",
++            "properties": {
++              "topic": "/SmartDashboard/Match/Compensacion mov deg",
++              "period": 0.06
++            }
++          },
++          {
++            "title": "Velocidad campo mps",
++            "x": 960.0,
++            "y": 640.0,
++            "width": 192.0,
++            "height": 128.0,
++            "type": "Text Display",
++            "properties": {
++              "topic": "/SmartDashboard/Match/Velocidad campo mps",
++              "period": 0.06
++            }
++          },
++          {
++            "title": "FMSInfo",
++            "x": 768.0,
++            "y": 768.0,
++            "width": 384.0,
++            "height": 128.0,
++            "type": "FMSInfo",
++            "properties": {
++              "topic": "/FMSInfo",
++              "period": 0.06
++            }
++          },
++          {
++            "title": "Piloto",
++            "x": 0.0,
++            "y": 896.0,
++            "width": 512.0,
++            "height": 384.0,
++            "type": "Camera Stream",
++            "properties": {
++              "topic": "/CameraPublisher/Piloto",
++              "period": 0.06
++            }
++          },
++          {
++            "title": "Fuente rumbo",
++            "x": 512.0,
++            "y": 896.0,
++            "width": 256.0,
++            "height": 128.0,
++            "type": "Text Display",
++            "properties": {
++              "topic": "/SmartDashboard/Match/Fuente rumbo",
++              "period": 0.06
++            }
++          },
++          {
++            "title": "Sin ver tag s",
++            "x": 768.0,
++            "y": 896.0,
++            "width": 192.0,
++            "height": 128.0,
++            "type": "Text Display",
++            "properties": {
++              "topic": "/SmartDashboard/Match/Sin ver tag s",
++              "period": 0.06
++            }
++          },
++          {
++            "title": "Latencia ms",
++            "x": 960.0,
++            "y": 896.0,
++            "width": 192.0,
++            "height": 128.0,
++            "type": "Text Display",
++            "properties": {
++              "topic": "/SmartDashboard/Match/Latencia ms",
++              "period": 0.06
++            }
++          }
++        ]
++      }
++    },
+     {
+       "name": "Demo",
+       "grid_layout": {
+@@ -553,4 +888,4 @@
+       }
+     }
+   ]
+-}
++}
+\ No newline at end of file
+diff --git a/src/main/java/frc/robot/Robot.java b/src/main/java/frc/robot/Robot.java
+index 3a0c122..f7a1ef7 100644
+--- a/src/main/java/frc/robot/Robot.java
++++ b/src/main/java/frc/robot/Robot.java
+@@ -13,8 +13,13 @@ import edu.wpi.first.wpilibj2.command.Command;
+ import edu.wpi.first.wpilibj2.command.CommandScheduler;
+ import frc.robot.constants.RobotConstants;
+ import frc.robot.constants.RobotConstants.RobotMode;
++import frc.robot.constants.CompetitionConstants;
++import frc.robot.util.CompetitionState;
+ import frc.robot.util.DemoDashboard;
+ import frc.robot.util.DemoState;
++import frc.robot.util.MatchDashboard;
++import edu.wpi.first.cameraserver.CameraServer;
++import edu.wpi.first.cscore.UsbCamera;
+ 
+ import org.littletonrobotics.junction.LogFileUtil;
+ import org.littletonrobotics.junction.LoggedRobot;
+@@ -81,9 +86,31 @@ public class Robot extends LoggedRobot {
+     // andar pasando el archivo por USB entre las laptops del equipo.
+     WebServer.start(5800, Filesystem.getDeployDirectory().getPath());
+ 
++    // Cámara de piloto (HBVCAM por USB al roboRIO). Sólo video para Elastic:
++    // el Rio no tiene CPU para AprilTags. Resolución y FPS bajos a propósito
++    // por el límite de ancho de banda del FMS.
++    if (CompetitionConstants.useDriverCamera && RobotConstants.currentMode == RobotConstants.Mode.REAL) {
++      try {
++        UsbCamera driverCamera = CameraServer.startAutomaticCapture("Piloto", 0);
++        driverCamera.setResolution(
++            CompetitionConstants.driverCameraWidth, CompetitionConstants.driverCameraHeight);
++        driverCamera.setFPS(CompetitionConstants.driverCameraFps);
++        // Si la cámara se desconecta y reconecta, seguir intentando en vez de
++        // dejar el stream muerto.
++        driverCamera.setConnectionStrategy(UsbCamera.ConnectionStrategy.kKeepOpen);
++      } catch (Exception e) {
++        System.err.println("[Robot] No se pudo iniciar la cámara de piloto: " + e.getMessage());
++      }
++    }
++
+     // Instantiate our RobotContainer. This will perform all our button bindings,
+     // and put our autonomous chooser on the dashboard.
+     robotContainer = new RobotContainer();
++
++    // Estado inicial de competencia al log, para que el primer frame ya lo traiga.
++    if (!RobotConstants.isDemoMode) {
++      CompetitionState.log();
++    }
+   }
+ 
+   /** This function is called periodically during all modes. */
+@@ -102,6 +129,8 @@ public class Robot extends LoggedRobot {
+     if (RobotConstants.isDemoMode) {
+       DemoState.log();
+       DemoDashboard.publish();
++    } else {
++      MatchDashboard.publish();
+     }
+   }
+ 
+@@ -110,6 +139,8 @@ public class Robot extends LoggedRobot {
+   public void disabledInit() {
+     if (RobotConstants.isDemoMode) {
+       DemoDashboard.reset();
++    } else {
++      MatchDashboard.reset();
+     }
+   }
+ 
+@@ -148,6 +179,10 @@ public class Robot extends LoggedRobot {
+     // cuanto lo habilitas porque quedó ese estado de la sesión anterior.
+     if (RobotConstants.isDemoMode) {
+       DemoState.reset();
++    } else {
++      // STRIKER → HUB. El operador elige otra cosa a propósito, no por
++      // herencia del partido anterior.
++      CompetitionState.reset();
+     }
+   }
+ 
+diff --git a/src/main/java/frc/robot/RobotContainer.java b/src/main/java/frc/robot/RobotContainer.java
+index 6695879..daa6287 100644
+--- a/src/main/java/frc/robot/RobotContainer.java
++++ b/src/main/java/frc/robot/RobotContainer.java
+@@ -29,6 +29,11 @@ import frc.robot.constants.DemoConstants;
+ import frc.robot.util.DemoDashboard;
+ import frc.robot.util.DemoState;
+ import frc.robot.commands.DriveCommands;
++import frc.robot.commands.competition.CompDriveCommands;
++import frc.robot.commands.competition.CompShooterCommands;
++import frc.robot.commands.competition.CompTurretCommands;
++import frc.robot.util.CompetitionState;
++import frc.robot.util.MatchDashboard;
+ import java.util.function.BooleanSupplier;
+ import frc.robot.commands.IndexerCommands;
+ import frc.robot.commands.IntakeCommands;
+@@ -40,6 +45,7 @@ import frc.robot.constants.RobotConstants;
+ import frc.robot.constants.ShooterConstants;
+ import frc.robot.constants.TunerConstants;
+ import frc.robot.constants.TurretConstants;
++import frc.robot.constants.VisionConstants;
+ import frc.robot.constants.RobotConstants.DriveMode;
+ import frc.robot.constants.RobotConstants.RobotMode;
+ import frc.robot.constants.RobotConstants.TurretMode;
+@@ -261,6 +267,33 @@ public class RobotContainer {
+       // competencia.
+       vision.setPoseEstimationEnabled(() -> DemoConstants.useVisionOdometry);
+       vision.setTrustedTagFilter(DemoState::isHubTag);
++
++      // La IMU interna de la LL4 gira con la torreta: se fuerza a externa.
++      if (VisionConstants.isLimelight4) {
++        vision.setImuModes(VisionConstants.limelight4ImuMode, VisionConstants.limelight4ImuMode);
++      }
++    } else {
++      // ════════════════════════════════════════════════════════════════════
++      // Cableado de la visión en COMPETENCIA: Limelight 4 fija en el cañón
++      // ════════════════════════════════════════════════════════════════════
++      //
++      // La cámara no se mueve, así que la transformada se publica UNA vez al
++      // arrancar desde VisionConstants (y la web UI de la Limelight debe estar
++      // en ceros). Todos los tags del campo corrigen la odometría; la torreta
++      // apunta por pose y no necesita ver nada.
++      if (VisionConstants.publishFixedCameraTransform) {
++        vision.setRobotToCamera(FIXED_CAMERA, VisionConstants.robotToLimelightFixed);
++      }
++      vision.setPoseEstimationEnabled(() -> true);
++      vision.setTrustedTagFilter(id -> true);
++
++      if (VisionConstants.isLimelight4) {
++        // Deshabilitado: siembra la IMU interna con el Pigeon. Habilitado: IMU
++        // interna con el Pigeon como asistencia (menos latencia en giros).
++        vision.setImuModes(
++            VisionConstants.limelight4ImuModeDisabled, VisionConstants.limelight4ImuModeEnabled);
++        vision.setThrottleManagementEnabled(true);
++      }
+     }
+ 
+     autoChooser = new LoggedDashboardChooser<>("Auto Choices", AutoBuilder.buildAutoChooser());
+@@ -284,11 +317,22 @@ public class RobotContainer {
+     // Configure the button bindings
+     if (RobotConstants.isDemoMode) {
+       configureDemoBindings();
++    } else if (useDenverBindings) {
++      configureDenverBindings();
+     } else {
+-      configureButtonBindings();
++      configureCompetitionBindings();
+     }
+   }
+ 
++  /** Índice de la Limelight fija en el arreglo de Vision. */
++  private static final int FIXED_CAMERA = 0;
++
++  /**
++   * Salida de emergencia: {@code true} carga los bindings de Denver tal cual
++   * (tres enums estáticos, PID de rumbo viejo) en vez de Competencia v2.
++   */
++  private static final boolean useDenverBindings = false;
++
+   // ══════════════════════════════════════════════════════════════════════════
+   //
+   //  D E M O   M O D E
+@@ -563,6 +607,176 @@ public class RobotContainer {
+                 shooter, turret));
+   }
+ 
++  // ══════════════════════════════════════════════════════════════════════════
++  //
++  //  C O M P E T E N C I A   v 2
++  //
++  //  El flujo de operación del demo, a velocidad de partido:
++  //
++  //    1. SELECCIONAR MODO     (operador, Y)     STRIKER ↔ BOMBER
++  //       SELECCIONAR OBJETIVO (operador, Back)  HUB ↔ FEEDER
++  //    2. APUNTAR o CARGAR     (operador, X / RT)
++  //         X  = la torreta rastrea (STRIKER) o el chasis se alinea (BOMBER),
++  //              sin flywheels
++  //         RT = lo mismo + hood y flywheel a la solución de tiro (el gatillo)
++  //    3. ALIMENTAR            (operador, LB / RB — la Y-valve)
++  //
++  //  Sin botón la torreta está en cero y nada gira.
++  //
++  //  ── PILOTO (puerto 0) ─────────────────────────────────────────────────
++  //     Stick izq.  Traslación (field-relative, flip por alianza)
++  //     Stick der.  Giro. En BOMBER, mientras el operador apunta, el chasis
++  //                 se alinea solo; mover el stick fuerte lo cancela.
++  //     LT          Modo precisión (30%)
++  //     B           Reset del frente (igual que Denver)
++  //
++  //  ── OPERADOR (puerto 1) ───────────────────────────────────────────────
++  //     Y           STRIKER ↔ BOMBER
++  //     Back        HUB ↔ FEEDER
++  //     X (hold)    APUNTAR
++  //     RT (hold)   CARGAR
++  //     LB / RB     Alimentar cañón fijo / torreta (+ agitación automática)
++  //     LT          Rodillos de intake
++  //     A (hold)    Extender intake con remate por corriente
++  //     B (hold)    Retraer intake
++  //     POV ↓       Agitar la caja
++  //     POV →       Desatascar indexer (reversa)
++  //     POV ↑       Prueba de flywheels al 25% (pit)
++  //     LS / RS     Jog del extensor sin soft limits (recalibración)
++  //     Start       (libre)
++  //
++  // ══════════════════════════════════════════════════════════════════════════
++  private void configureCompetitionBindings() {
++    final CommandXboxController mech = mechanismsJoystick;
++
++    Trigger aimTrigger = mech.x();
++    Trigger chargeTrigger = mech.rightTrigger(0.5);
++    Trigger feedShooterTrigger = mech.leftBumper();
++    Trigger feedTurretTrigger = mech.rightBumper();
++
++    // "El chasis debe apuntar" = el operador está apuntando o cargando.
++    BooleanSupplier assistSupplier =
++        () -> aimTrigger.getAsBoolean() || chargeTrigger.getAsBoolean();
++
++    MatchDashboard.configure(vision, shooter, turret);
++
++    // ── PILOTO ─────────────────────────────────────────────────────────────
++
++    drive.setDefaultCommand(
++        CompDriveCommands.joystickDrive(
++            drive,
++            () -> -driverJoystick.getLeftY(),
++            () -> -driverJoystick.getLeftX(),
++            () -> -driverJoystick.getRightX(),
++            () -> driverJoystick.getLeftTriggerAxis() > 0.5,
++            assistSupplier));
++
++    // Reset del frente: la rotación de la odometría a 0° (180° en rojo). La
++    // visión la sigue corrigiendo después, que es lo que queremos en cancha.
++    driverJoystick
++        .b()
++        .onTrue(
++            Commands.runOnce(
++                () -> {
++                  drive.setPose(
++                      new Pose2d(
++                          drive.getPose().getTranslation(),
++                          CompetitionState.isRedAlliance() ? Rotation2d.k180deg : Rotation2d.kZero));
++                },
++                drive)
++                .ignoringDisable(true));
++
++    // ── OPERADOR: selección de modo y objetivo ─────────────────────────────
++
++    mech.y().onTrue(Commands.runOnce(CompetitionState::toggleMode).ignoringDisable(true));
++    mech.back().onTrue(Commands.runOnce(CompetitionState::toggleTarget).ignoringDisable(true));
++
++    // ── Apuntado y carga ───────────────────────────────────────────────────
++
++    turret.setDefaultCommand(
++        CompTurretCommands.turretCmd(
++            turret, drive, aimTrigger::getAsBoolean, chargeTrigger::getAsBoolean));
++
++    shooter.setDefaultCommand(
++        CompShooterCommands.shooterCmd(shooter, drive, chargeTrigger::getAsBoolean));
++
++    // ── Alimentar con la Y-valve ───────────────────────────────────────────
++
++    indexer.setDefaultCommand(
++        IndexerCommands.joystickIndexerCmd(
++            indexer,
++            feedShooterTrigger::getAsBoolean,
++            feedTurretTrigger::getAsBoolean));
++
++    // ── Agitación ──────────────────────────────────────────────────────────
++
++    if (IntakeConstants.autoAgitateWhileFeeding) {
++      feedShooterTrigger.or(feedTurretTrigger).whileTrue(IntakeCommands.agitate(intake));
++    }
++    mech.povDown().whileTrue(IntakeCommands.agitate(intake));
++
++    // ── Intake ─────────────────────────────────────────────────────────────
++
++    mech
++        .leftTrigger(0.5)
++        .whileTrue(Commands.startEnd(intake::intake, intake::stopRollers, intake));
++
++    mech
++        .povRight()
++        .whileTrue(Commands.runEnd(indexer::outtake, indexer::stopIndexer, indexer));
++
++    mech.a().whileTrue(IntakeCommands.extendWithStallHoming(intake));
++
++    mech
++        .b()
++        .whileTrue(Commands.startEnd(intake::setExtendedReset, intake::stopExtensor, intake));
++
++    // Jog sin soft limits — sólo para recalibrar contra el tope mecánico.
++    mech
++        .rightStick()
++        .whileTrue(
++            Commands.runEnd(
++                () -> {
++                  intake.setSoftwareLimit(false);
++                  intake.extend();
++                },
++                () -> {
++                  intake.setSoftwareLimit(true);
++                  intake.stopExtensor();
++                },
++                intake));
++
++    mech
++        .leftStick()
++        .whileTrue(
++            Commands.runEnd(
++                () -> {
++                  intake.setSoftwareLimit(false);
++                  intake.retract();
++                },
++                () -> {
++                  intake.setSoftwareLimit(true);
++                  intake.stopExtensor();
++                },
++                intake));
++
++    // ── Prueba de pit ──────────────────────────────────────────────────────
++
++    mech
++        .povUp()
++        .whileTrue(
++            Commands.runEnd(
++                () -> {
++                  shooter.setFlywheelOpenLoop(0.25);
++                  turret.setFlywheelOpenLoop(0.25);
++                },
++                () -> {
++                  shooter.stopFlywheel();
++                  turret.stopFlywheel();
++                },
++                shooter, turret));
++  }
++
+   /**
+    * Use this method to define your button->command mappings. Buttons can be
+    * created by
+@@ -571,7 +785,7 @@ public class RobotContainer {
+    * it to a {@link
+    * edu.wpi.first.wpilibj2.command.button.JoystickButton}.
+    */
+-  private void configureButtonBindings() {
++  private void configureDenverBindings() {
+     // State machine
+     driverJoystick.x().onTrue(Commands.runOnce(() -> {
+       Drive.mode = Drive.mode != DriveMode.ORBIT ? DriveMode.ORBIT : DriveMode.NORMAL;
+diff --git a/src/main/java/frc/robot/commands/IntakeCommands.java b/src/main/java/frc/robot/commands/IntakeCommands.java
+index e96a92a..ecb84cc 100644
+--- a/src/main/java/frc/robot/commands/IntakeCommands.java
++++ b/src/main/java/frc/robot/commands/IntakeCommands.java
+@@ -1,14 +1,30 @@
+ package frc.robot.commands;
+ 
+-import frc.robot.subsystems.intake.Intake;
+-
+ import java.util.function.BooleanSupplier;
+ 
+-import edu.wpi.first.math.geometry.Rotation2d;
++import org.littletonrobotics.junction.Logger;
++
++import edu.wpi.first.math.MathUtil;
++import edu.wpi.first.wpilibj.Timer;
+ import edu.wpi.first.wpilibj2.command.Command;
+ import edu.wpi.first.wpilibj2.command.Commands;
++import frc.robot.constants.IntakeConstants;
++import frc.robot.subsystems.intake.Intake;
+ 
++/**
++ * Comandos de intake compartidos por competencia y demo: agitación de la caja
++ * y extensión con remate por corriente.
++ *
++ * <p>
++ * Se probaron en el demo del StingyCamp y se migraron tal cual; sus constantes
++ * viven en {@link IntakeConstants}. {@code DemoIntakeCommands} delega aquí.
++ */
+ public class IntakeCommands {
++
++    private IntakeCommands() {
++    }
++
++    /** Comando de Denver (no está en uso en ningún binding, se conserva). */
+     public static Command joystickIntakeCmd(
+         Intake intake,
+         BooleanSupplier intakeupplier,
+@@ -19,20 +35,214 @@ public class IntakeCommands {
+                 boolean out = outtakeupplier.getAsBoolean() && !intakeupplier.getAsBoolean();
+                 boolean extend = in || out;
+ 
+-                if (extend ) {
++                if (extend) {
+                     intake.setExtended();
+-                    if(in) {
++                    if (in) {
+                         intake.intake();
+-                    } else if (out) {
++                    } else {
+                         intake.outtake();
+                     }
+-                } else if (!extend ) {
++                } else {
+                     intake.setExtendedReset();
+                     intake.stopRollers();
+-                } else {
+-                    intake.stopExtensor();
+                 }
+             },
+         intake);
+     }
+-}
+\ No newline at end of file
++
++    // ════════════════════════════════════════════════════════════════════════
++    // AGITACIÓN
++    // ════════════════════════════════════════════════════════════════════════
++
++    /**
++     * Agita la caja para romper puentes de pelotas.
++     *
++     * <h2>Fase 1 — Pre-roll ({@code agitatePrerollSeconds}, medio segundo)</h2>
++     *
++     * Sólo gira el rodillo, sin mover el extensor. Es para las pelotas que
++     * quedaron a medio camino en la rampa: si empiezas a sacudir de inmediato,
++     * esas pelotas salen disparadas hacia afuera en vez de terminar de entrar.
++     * Medio segundo de rodillo solo las acomoda adentro.
++     *
++     * <h2>Fase 2 — Sacudida con envolvente decreciente</h2>
++     *
++     * <pre>
++     *   envolvente(t) = e^(−t / τ)
++     *   setpoint(t)   = centro(t) + amplitud(t) · sin(2π f t)
++     * </pre>
++     *
++     * El centro converge a la posición cerrada mientras la amplitud se apaga, así
++     * que la caja termina cerrada con todas las pelotas asentadas. El rodillo
++     * sigue girando hacia adentro todo el tiempo para barrer de vuelta lo que la
++     * sacudida empuje hacia afuera.
++     *
++     * <p>
++     * Con los valores por defecto (τ = 2.5 s): a los 0.5 s arranca la sacudida
++     * oscilando entre 6 y 16 rad, a los 3 s ya está entre 4.3 y 7, y a los 8 s
++     * está prácticamente cerrada en 4 rad.
++     */
++    public static Command agitate(Intake intake) {
++        Timer timer = new Timer();
++
++        return Commands.runEnd(
++                () -> {
++                    double elapsed = timer.get();
++                    intake.setRollersOpenLoop(IntakeConstants.agitateRollerSpeed);
++
++                    if (elapsed < IntakeConstants.agitatePrerollSeconds) {
++                        // Fase 1: sólo rodillo. El extensor se queda donde está
++                        // para no empujar hacia afuera lo que está entrando.
++                        intake.holdExtensorHere();
++                        Logger.recordOutput("Intake/Agitate/Phase", "PREROLL");
++                        return;
++                    }
++
++                    double t = elapsed - IntakeConstants.agitatePrerollSeconds;
++                    double envelope = Math.exp(-t / IntakeConstants.agitateDecaySeconds);
++
++                    double center = IntakeConstants.agitateEndCenterRad
++                            + (IntakeConstants.agitateStartCenterRad - IntakeConstants.agitateEndCenterRad)
++                                    * envelope;
++                    double amplitude = IntakeConstants.agitateAmplitudeRad * envelope;
++
++                    double setpoint = center + amplitude
++                            * Math.sin(2.0 * Math.PI * IntakeConstants.agitateFrequencyHz * t);
++                    setpoint = MathUtil.clamp(
++                            setpoint, IntakeConstants.agitateMinRad, IntakeConstants.agitateMaxRad);
++
++                    intake.setExtensorPositionRad(setpoint);
++
++                    Logger.recordOutput("Intake/Agitate/Phase", "SHAKE");
++                    Logger.recordOutput("Intake/Agitate/SetpointRad", setpoint);
++                    Logger.recordOutput("Intake/Agitate/Envelope", envelope);
++                },
++                () -> {
++                    intake.setExtendedReset();
++                    intake.stopRollers();
++                    Logger.recordOutput("Intake/Agitate/Phase", "IDLE");
++                },
++                intake)
++                .beforeStarting(timer::restart);
++    }
++
++    // ════════════════════════════════════════════════════════════════════════
++    // EXTENSIÓN CON REMATE POR CORRIENTE
++    // ════════════════════════════════════════════════════════════════════════
++
++    /**
++     * Extiende el intake y remata contra el tope mecánico detectándolo por
++     * corriente.
++     *
++     * <h2>El problema que resuelve</h2>
++     *
++     * Con un objetivo de posición fijo, si la calibración se corre unos grados
++     * —porque el encoder arrancó en otro lado, porque el rack se movió, porque
++     * el ratio del gearbox tiene división entera— el intake se queda corto. Y un
++     * intake que no sale por completo no traga bien.
++     *
++     * <h2>Cómo funciona</h2>
++     *
++     * <ol>
++     * <li><b>Fase rápida:</b> lazo cerrado a {@code extendedRotation}. Recorre
++     * casi todo el camino en el menor tiempo posible.</li>
++     * <li><b>Fase de remate:</b> apaga los soft limits y empuja hacia afuera en
++     * lazo abierto a {@code stallHomingSpeed} (12%). Despacio a propósito: el
++     * objetivo es sentir el tope, no golpearlo.</li>
++     * <li><b>Detección:</b> cuando la corriente de estator supera
++     * {@code stallCurrentAmps} sostenida por {@code stallDebounceSeconds}, es el
++     * tope. El debounce existe porque el pico de arranque del motor se vería
++     * igual que un tope.</li>
++     * <li><b>Retroceso:</b> se despega {@code stallBackoffRad} y se queda ahí en
++     * lazo cerrado. Dejar el mecanismo forzando su propio tope calienta el motor
++     * y desgasta el rack.</li>
++     * </ol>
++     *
++     * <p>
++     * La gran ventaja es que <b>no depende de calibración</b>: el tope mecánico
++     * está donde está, y el robot lo encuentra solo cada vez.
++     *
++     * <p>
++     * Si {@code IntakeConstants.useStallHoming} está en false, se comporta como
++     * la extensión de siempre.
++     */
++    public static Command extendWithStallHoming(Intake intake) {
++        Timer phaseTimer = new Timer();
++        Timer stallTimer = new Timer();
++        // Índice 0 = fase actual (0 posición, 1 remate, 2 sostener)
++        int[] phase = { 0 };
++        double[] holdPosition = { 0.0 };
++
++        return Commands.runEnd(
++                () -> {
++                    if (!IntakeConstants.useStallHoming) {
++                        intake.setExtended();
++                        Logger.recordOutput("Intake/Homing/HomingPhase", "POSITION_ONLY");
++                        return;
++                    }
++
++                    switch (phase[0]) {
++                        case 0 -> {
++                            // Fase rápida: lazo cerrado hasta cerca del tope.
++                            intake.setExtended();
++                            Logger.recordOutput("Intake/Homing/HomingPhase", "POSITION");
++                            boolean closeEnough = intake.getExtensorPositionRad()
++                                    > IntakeConstants.extendedRotation.getRadians() - 1.0;
++                            if (closeEnough || phaseTimer.hasElapsed(1.5)) {
++                                phase[0] = 1;
++                                phaseTimer.restart();
++                                stallTimer.reset();
++                                intake.setSoftwareLimit(false);
++                            }
++                        }
++                        case 1 -> {
++                            // Remate: empuje lento hasta sentir el tope.
++                            intake.extendAtSpeed(IntakeConstants.stallHomingSpeed);
++                            Logger.recordOutput("Intake/Homing/HomingPhase", "SEEKING");
++
++                            boolean stalled =
++                                    intake.getExtensorCurrentAmps() > IntakeConstants.stallCurrentAmps;
++                            if (stalled) {
++                                if (!stallTimer.isRunning()) {
++                                    stallTimer.restart();
++                                }
++                            } else {
++                                stallTimer.stop();
++                                stallTimer.reset();
++                            }
++
++                            boolean confirmed = stallTimer.isRunning()
++                                    && stallTimer.hasElapsed(IntakeConstants.stallDebounceSeconds);
++
++                            if (confirmed || phaseTimer.hasElapsed(IntakeConstants.stallTimeoutSeconds)) {
++                                holdPosition[0] = intake.getExtensorPositionRad()
++                                        - IntakeConstants.stallBackoffRad;
++                                intake.stopExtensor();
++                                intake.setSoftwareLimit(true);
++                                phase[0] = 2;
++                                Logger.recordOutput("Intake/Homing/StallFoundRad", holdPosition[0]);
++                                Logger.recordOutput("Intake/Homing/StallConfirmed", confirmed);
++                            }
++                        }
++                        default -> {
++                            // Sostener despegado del tope.
++                            intake.setExtensorPositionRad(holdPosition[0]);
++                            Logger.recordOutput("Intake/Homing/HomingPhase", "HOLDING");
++                        }
++                    }
++                },
++                () -> {
++                    // Los soft limits SIEMPRE se restauran, sin importar cómo
++                    // termine el comando. Si se quedaran apagados, el siguiente
++                    // jog manual podría destrozar el rack.
++                    intake.setSoftwareLimit(true);
++                    intake.stopExtensor();
++                    Logger.recordOutput("Intake/Homing/HomingPhase", "IDLE");
++                },
++                intake)
++                .beforeStarting(() -> {
++                    phase[0] = 0;
++                    phaseTimer.restart();
++                    stallTimer.reset();
++                });
++    }
++}
+diff --git a/src/main/java/frc/robot/commands/competition/CompDriveCommands.java b/src/main/java/frc/robot/commands/competition/CompDriveCommands.java
+new file mode 100644
+index 0000000..3152141
+--- /dev/null
++++ b/src/main/java/frc/robot/commands/competition/CompDriveCommands.java
+@@ -0,0 +1,257 @@
++package frc.robot.commands.competition;
++
++import java.util.function.BooleanSupplier;
++import java.util.function.DoubleSupplier;
++
++import org.littletonrobotics.junction.Logger;
++
++import edu.wpi.first.math.MathUtil;
++import edu.wpi.first.math.geometry.Pose2d;
++import edu.wpi.first.math.geometry.Rotation2d;
++import edu.wpi.first.math.geometry.Translation2d;
++import edu.wpi.first.math.kinematics.ChassisSpeeds;
++import edu.wpi.first.wpilibj.Timer;
++import edu.wpi.first.wpilibj2.command.Command;
++import edu.wpi.first.wpilibj2.command.Commands;
++import frc.robot.constants.CompetitionConstants;
++import frc.robot.subsystems.drive.Drive;
++import frc.robot.util.CompetitionState;
++import frc.robot.util.HeadingController;
++import frc.robot.util.MatchDashboard;
++import frc.robot.util.ShotSolution;
++import frc.robot.util.SmoothDriveFilter;
++import frc.robot.util.SmoothRateLimiter;
++
++/**
++ * Manejo de COMPETENCIA v2.
++ *
++ * <p>
++ * Es el Smooth Drive del demo a velocidad de partido, con la asistencia de
++ * rumbo de BOMBER hecha por <b>odometría</b>: el rumbo objetivo es el rumbo
++ * del robot al objetivo activo más 180°, porque los dos cañones disparan
++ * hacia atrás. Es exactamente lo que hacía el modo ORBIT de Denver, con dos
++ * diferencias:
++ *
++ * <ul>
++ * <li>El PID de rumbo no re-escala su salida (ver {@link HeadingController}).
++ * Ése era el bug del "orbit muy violento".</li>
++ * <li>La asistencia sólo actúa <b>mientras el operador apunta o carga</b>. Antes
++ * cambiar a BOMBER le quitaba el giro al piloto de golpe sin que nadie lo
++ * hubiera pedido.</li>
++ * </ul>
++ *
++ * <p>
++ * Siempre field-relative con flip por alianza y reset de giro con B, igual que
++ * Denver. No hay orientación DRIVER: en cancha la referencia es el campo.
++ */
++public final class CompDriveCommands {
++
++    private CompDriveCommands() {
++    }
++
++    // ── Utilidades ──────────────────────────────────────────────────────────
++
++    /** Stick → vector normalizado. Deadband sobre la MAGNITUD, no por eje. */
++    private static Translation2d joystickToVector(double x, double y) {
++        double magnitude = MathUtil.applyDeadband(
++                Math.hypot(x, y), CompetitionConstants.joystickDeadband);
++        if (magnitude < 1.0e-6) {
++            return Translation2d.kZero;
++        }
++        Rotation2d direction = new Rotation2d(Math.atan2(y, x));
++        return new Translation2d(
++                Math.pow(Math.min(magnitude, 1.0), CompetitionConstants.joystickExponent), direction);
++    }
++
++    private static double joystickToScalar(double value) {
++        double out = MathUtil.applyDeadband(value, CompetitionConstants.joystickDeadband);
++        return Math.copySign(Math.pow(Math.abs(out), CompetitionConstants.joystickExponent), out);
++    }
++
++    /** Rotación de referencia: odometría, más 180° en alianza roja. */
++    private static Rotation2d fieldReference(Drive drive) {
++        Rotation2d current = drive.getRotation();
++        return CompetitionState.isRedAlliance() ? current.plus(Rotation2d.k180deg) : current;
++    }
++
++    // ── Default command ─────────────────────────────────────────────────────
++
++    /**
++     * Manejo field-relative suavizado con asistencia de rumbo en BOMBER.
++     *
++     * @param precisionSupplier LT del piloto: baja la velocidad.
++     * @param assistSupplier    "El chasis debe apuntar" = el operador está
++     *                          apuntando o cargando.
++     */
++    public static Command joystickDrive(
++            Drive drive,
++            DoubleSupplier xSupplier,
++            DoubleSupplier ySupplier,
++            DoubleSupplier omegaSupplier,
++            BooleanSupplier precisionSupplier,
++            BooleanSupplier assistSupplier) {
++
++        SmoothDriveFilter translationFilter = new SmoothDriveFilter(
++                CompetitionConstants.translationMaxAccel,
++                CompetitionConstants.translationMaxDecel,
++                CompetitionConstants.translationSmoothingTau);
++
++        SmoothRateLimiter rotationFilter = new SmoothRateLimiter(
++                CompetitionConstants.rotationMaxAccel,
++                CompetitionConstants.rotationMaxDecel,
++                CompetitionConstants.rotationSmoothingTau);
++
++        HeadingController heading = new HeadingController(
++                CompetitionConstants.headingKp,
++                CompetitionConstants.headingKd,
++                CompetitionConstants.headingDerivativeAlpha,
++                CompetitionConstants.headingToleranceRad,
++                CompetitionConstants.headingSoftZoneRad,
++                CompetitionConstants.headingMaxOmegaRadPerSec);
++
++        TargetHeading targetHeading = new TargetHeading();
++
++        return Commands.run(
++                () -> {
++                    // ── Traslación ─────────────────────────────────────────
++                    Translation2d desired = joystickToVector(
++                            xSupplier.getAsDouble(), ySupplier.getAsDouble());
++                    Translation2d filtered = translationFilter.calculate(desired);
++
++                    boolean precision = precisionSupplier.getAsBoolean();
++                    double speedFraction = precision
++                            ? CompetitionConstants.precisionSpeedFraction
++                            : CompetitionConstants.maxSpeedFraction;
++                    double maxMetersPerSec = drive.getMaxLinearSpeedMetersPerSec() * speedFraction;
++
++                    double vx = filtered.getX() * maxMetersPerSec;
++                    double vy = filtered.getY() * maxMetersPerSec;
++
++                    // ── Rotación ───────────────────────────────────────────
++                    double stickOmega = joystickToScalar(omegaSupplier.getAsDouble());
++
++                    boolean driverOverride = CompetitionConstants.headingDriverOverride
++                            && Math.abs(omegaSupplier.getAsDouble())
++                                    > CompetitionConstants.headingOverrideThreshold;
++
++                    boolean headingAssisted = CompetitionState.isBomber()
++                            && assistSupplier.getAsBoolean()
++                            && !driverOverride;
++
++                    double omegaRadPerSec;
++                    if (headingAssisted) {
++                        Double error = targetHeading.computeErrorRad(drive);
++                        if (error == null) {
++                            // Demasiado cerca del objetivo y sin rumbo previo:
++                            // mejor devolverle el giro al piloto.
++                            headingAssisted = false;
++                            omegaRadPerSec = manualOmega(rotationFilter, stickOmega, speedFraction);
++                            MatchDashboard.alignSource = "SIN FUENTE";
++                        } else {
++                            // La salida del controlador ya está en rad/s. El
++                            // filtro trabaja normalizado, así que se divide y
++                            // se vuelve a multiplicar por el MISMO número: no
++                            // hay re-escalado.
++                            double max = CompetitionConstants.headingMaxOmegaRadPerSec;
++                            omegaRadPerSec = rotationFilter.calculate(heading.calculate(error) / max) * max;
++                            MatchDashboard.alignSource = "ODOMETRIA";
++                            MatchDashboard.headingErrorDeg = Math.toDegrees(error);
++                            Logger.recordOutput("Match/Drive/HeadingErrorDeg", Math.toDegrees(error));
++                        }
++                    } else {
++                        omegaRadPerSec = manualOmega(rotationFilter, stickOmega, speedFraction);
++                        heading.reset();
++                        targetHeading.reset();
++                        MatchDashboard.alignSource = CompetitionState.isBomber()
++                                ? (driverOverride ? "MANUAL (piloto)" : "MANUAL")
++                                : "—";
++                        MatchDashboard.headingErrorDeg = 0.0;
++                    }
++
++                    MatchDashboard.headingAssisted = headingAssisted;
++                    MatchDashboard.precisionActive = precision;
++
++                    Logger.recordOutput("Match/Drive/RawMagnitude", desired.getNorm());
++                    Logger.recordOutput("Match/Drive/CommandMagnitude", translationFilter.getMagnitude());
++                    Logger.recordOutput("Match/Drive/HeadingAssisted", headingAssisted);
++                    Logger.recordOutput("Match/Drive/SpeedFraction", speedFraction);
++
++                    drive.runVelocity(
++                            ChassisSpeeds.fromFieldRelativeSpeeds(
++                                    new ChassisSpeeds(vx, vy, omegaRadPerSec),
++                                    fieldReference(drive)));
++                },
++                drive)
++                .beforeStarting(() -> {
++                    translationFilter.reset();
++                    rotationFilter.reset(0.0);
++                    heading.reset();
++                    targetHeading.reset();
++                });
++    }
++
++    private static double manualOmega(
++            SmoothRateLimiter rotationFilter, double stickOmega, double speedFraction) {
++        return rotationFilter.calculate(stickOmega)
++                * CompetitionConstants.maxAngularSpeedRadPerSec * speedFraction;
++    }
++
++    /**
++     * Rumbo objetivo por odometría, con slew.
++     *
++     * <p>
++     * El rumbo deseado es el rumbo al objetivo activo <b>más 180°</b> (los
++     * cañones miran hacia atrás) <b>más la compensación de disparo en
++     * movimiento</b>, que es el mismo delta que aplica la torreta. Se limita la
++     * velocidad a la que ese rumbo puede cambiar para que una corrección de pose
++     * de un ciclo no mande al robot a dar la vuelta.
++     */
++    private static final class TargetHeading {
++        private double targetHeadingRad = Double.NaN;
++        private double lastTimestamp = -1.0;
++
++        void reset() {
++            targetHeadingRad = Double.NaN;
++            lastTimestamp = -1.0;
++        }
++
++        /** @return Error de rumbo a comandar, o {@code null} si no hay fuente. */
++        Double computeErrorRad(Drive drive) {
++            double now = Timer.getFPGATimestamp();
++            double dt = (lastTimestamp < 0.0) ? 0.02 : now - lastTimestamp;
++            lastTimestamp = now;
++            dt = MathUtil.clamp(dt, 0.001, 0.1);
++
++            Pose2d pose = drive.getPose();
++            double currentHeading = pose.getRotation().getRadians();
++            Translation2d target = CompetitionState.getActiveTarget(pose);
++            Translation2d toTarget = target.minus(pose.getTranslation());
++
++            if (toTarget.getNorm() < CompetitionConstants.headingMinTargetDistanceMeters) {
++                // Pegados al objetivo: mantener el último rumbo bueno.
++                if (Double.isNaN(targetHeadingRad)) {
++                    return null;
++                }
++                return MathUtil.angleModulus(targetHeadingRad - currentHeading);
++            }
++
++            // Misma solución de tiro que la torreta y el cañón fijo.
++            ShotSolution shot = ShotSolution.compute(
++                    pose, drive.getFieldRelativeVelocity(), target);
++            Logger.recordOutput("Match/Drive/AimOffsetDeg", Math.toDegrees(shot.aimOffsetRad));
++
++            double desired = toTarget.getAngle().plus(Rotation2d.k180deg).getRadians()
++                    + shot.aimOffsetRad;
++
++            if (Double.isNaN(targetHeadingRad)) {
++                targetHeadingRad = desired;
++            } else {
++                double step = MathUtil.angleModulus(desired - targetHeadingRad);
++                double maxStep = CompetitionConstants.headingTargetSlewRadPerSec * dt;
++                targetHeadingRad += MathUtil.clamp(step, -maxStep, maxStep);
++            }
++
++            return MathUtil.angleModulus(targetHeadingRad - currentHeading);
++        }
++    }
++}
+diff --git a/src/main/java/frc/robot/commands/competition/CompShooterCommands.java b/src/main/java/frc/robot/commands/competition/CompShooterCommands.java
+new file mode 100644
+index 0000000..337a20d
+--- /dev/null
++++ b/src/main/java/frc/robot/commands/competition/CompShooterCommands.java
+@@ -0,0 +1,61 @@
++package frc.robot.commands.competition;
++
++import java.util.function.BooleanSupplier;
++
++import org.littletonrobotics.junction.Logger;
++
++import edu.wpi.first.math.geometry.Pose2d;
++import edu.wpi.first.math.geometry.Translation2d;
++import edu.wpi.first.wpilibj2.command.Command;
++import edu.wpi.first.wpilibj2.command.Commands;
++import frc.robot.subsystems.drive.Drive;
++import frc.robot.subsystems.shooter.Shooter;
++import frc.robot.util.CompetitionState;
++import frc.robot.util.ShotSolution;
++
++/**
++ * Cañón fijo en COMPETENCIA v2.
++ *
++ * <p>
++ * Sólo participa en BOMBER: con la torreta en cero los dos cañones miran hacia
++ * atrás y el chasis los orienta al objetivo. En STRIKER la que apunta es la
++ * torreta y el fijo estaría tirando a donde nadie pidió, así que se queda
++ * apagado — igual que en Denver.
++ *
++ * <p>
++ * Usa la <b>misma</b> {@link ShotSolution} que la torreta, con los mismos
++ * argumentos: los dos hoods reciben el mismo número por construcción.
++ */
++public final class CompShooterCommands {
++
++    private CompShooterCommands() {
++    }
++
++    public static Command shooterCmd(
++            Shooter shooter,
++            Drive drive,
++            BooleanSupplier chargeSupplier) {
++
++        return Commands.run(
++                () -> {
++                    boolean shouldShoot = chargeSupplier.getAsBoolean() && CompetitionState.isBomber();
++
++                    if (!shouldShoot) {
++                        shooter.stopFlywheel();
++                        shooter.setHoodAtInitialPosition();
++                        Logger.recordOutput("Match/FixedShooterActive", false);
++                        return;
++                    }
++
++                    Pose2d pose = drive.getPose();
++                    Translation2d target = CompetitionState.getActiveTarget(pose);
++                    ShotSolution shot = ShotSolution.compute(
++                            pose, drive.getFieldRelativeVelocity(), target);
++
++                    shooter.setHoodForDistance(shot.distanceMeters);
++                    shooter.setFlywheelVelocityForDistance(shot.distanceMeters);
++                    Logger.recordOutput("Match/FixedShooterActive", true);
++                },
++                shooter);
++    }
++}
+diff --git a/src/main/java/frc/robot/commands/competition/CompTurretCommands.java b/src/main/java/frc/robot/commands/competition/CompTurretCommands.java
+new file mode 100644
+index 0000000..a87ba9a
+--- /dev/null
++++ b/src/main/java/frc/robot/commands/competition/CompTurretCommands.java
+@@ -0,0 +1,173 @@
++package frc.robot.commands.competition;
++
++import java.util.function.BooleanSupplier;
++
++import org.littletonrobotics.junction.Logger;
++
++import edu.wpi.first.math.geometry.Pose2d;
++import edu.wpi.first.math.geometry.Translation2d;
++import edu.wpi.first.wpilibj2.command.Command;
++import edu.wpi.first.wpilibj2.command.Commands;
++import frc.robot.constants.CompetitionConstants;
++import frc.robot.subsystems.drive.Drive;
++import frc.robot.subsystems.turret.Turret;
++import frc.robot.util.CompetitionState;
++import frc.robot.util.FieldTracking;
++import frc.robot.util.MatchDashboard;
++import frc.robot.util.ShotSolution;
++import frc.robot.util.TurretAimTracker;
++
++/**
++ * Torreta en COMPETENCIA v2.
++ *
++ * <h2>Apuntado por odometría</h2>
++ *
++ * La torreta sabe dónde está el objetivo (constante del campo) y dónde está el
++ * robot (pose estimator: encoders + Pigeon + MegaTag2 de la Limelight fija).
++ * Con eso calcula su ángulo cada 20 ms con
++ * {@link Turret#computeTurretAngleRad}, el método de Denver. Lo que cambia
++ * respecto a Denver es <b>cómo llega ese ángulo al motor</b>: pasa por
++ * {@link TurretAimTracker} (filtro, slew y deadband de comando) en vez de
++ * comandarse crudo a 50 Hz, que es lo que hacía temblar el mecanismo.
++ *
++ * <h2>Flujo</h2>
++ *
++ * <pre>
++ *   sin botón    → torreta a cero, flywheel apagado, hood en reposo
++ *   APUNTAR (X)  → STRIKER: rastrea el objetivo   |  BOMBER: se queda en cero
++ *   CARGAR  (RT) → lo mismo + hood y flywheel a la solución de tiro
++ * </pre>
++ *
++ * <p>
++ * La compensación de disparo en movimiento ({@link ShotSolution}) entra como
++ * argumento de {@code computeTurretAngleRad}, ANTES del envolvimiento y del
++ * clamp, para que un objetivo cerca de la costura de los soft limits dé la
++ * vuelta en vez de saturar.
++ */
++public final class CompTurretCommands {
++
++    private CompTurretCommands() {
++    }
++
++    /**
++     * Default command de la torreta.
++     *
++     * @param aimSupplier    APUNTAR: rastrea, sin flywheel.
++     * @param chargeSupplier CARGAR: rastrea y acelera a la solución de tiro.
++     */
++    public static Command turretCmd(
++            Turret turret,
++            Drive drive,
++            BooleanSupplier aimSupplier,
++            BooleanSupplier chargeSupplier) {
++
++        TurretAimTracker tracker = new TurretAimTracker();
++
++        return Commands.run(
++                () -> {
++                    boolean charging = chargeSupplier.getAsBoolean();
++                    boolean aiming = aimSupplier.getAsBoolean() || charging;
++
++                    // ═══════════ INACTIVA ═══════════
++                    if (!aiming) {
++                        turret.holdZero();
++                        turret.stopFlywheel();
++                        turret.setHoodAtInitialPosition();
++                        tracker.reset(turret.getAngleRad());
++
++                        MatchDashboard.turretState = "INACTIVA";
++                        MatchDashboard.aiming = false;
++                        MatchDashboard.charging = false;
++                        MatchDashboard.turretOnTarget = false;
++                        MatchDashboard.distanceMeters = 0.0;
++                        MatchDashboard.turretErrorDeg = 0.0;
++                        MatchDashboard.shotAimOffsetDeg = 0.0;
++                        MatchDashboard.shotCompensationMeters = 0.0;
++                        MatchDashboard.fieldSpeedMetersPerSec = 0.0;
++                        Logger.recordOutput("Match/Turret/State", "IDLE");
++                        return;
++                    }
++
++                    MatchDashboard.aiming = true;
++                    MatchDashboard.charging = charging;
++
++                    // Solución de tiro compartida con el cañón fijo y el chasis.
++                    Pose2d pose = drive.getPose();
++                    Translation2d target = CompetitionState.getActiveTarget(pose);
++                    ShotSolution shot = ShotSolution.compute(
++                            pose, drive.getFieldRelativeVelocity(), target);
++                    shot.log();
++
++                    double distance = shot.distanceMeters;
++                    MatchDashboard.distanceMeters = distance;
++                    MatchDashboard.fieldSpeedMetersPerSec = drive.getFieldRelativeVelocity().getNorm();
++                    MatchDashboard.shotCompensationMeters = shot.compensationMeters;
++
++                    // ═══════════ APUNTADO ═══════════
++                    if (CompetitionState.isBomber()) {
++                        // En BOMBER la torreta se congela en cero y el chasis
++                        // apunta (CompDriveCommands). Los dos cañones salen
++                        // hacia atrás.
++                        turret.holdZero();
++                        tracker.reset(turret.getAngleRad());
++                        MatchDashboard.turretState = "CERO (chasis apunta)";
++                        MatchDashboard.turretOnTarget = turret.isAtAngle(
++                                0.0, CompetitionConstants.turretOnTargetToleranceRad);
++                        MatchDashboard.turretErrorDeg = Math.toDegrees(-turret.getAngleRad());
++                        MatchDashboard.shotAimOffsetDeg = 0.0;
++                        Logger.recordOutput("Match/Turret/State", "HOLD_ZERO");
++
++                    } else {
++                        // STRIKER: apuntado continuo por odometría.
++                        boolean tooClose = pose.getTranslation().getDistance(target)
++                                < CompetitionConstants.turretAimMinDistanceMeters;
++
++                        if (tooClose) {
++                            // Pegados al objetivo unos centímetros de pose son
++                            // decenas de grados: se congela el último ángulo.
++                            tracker.hold();
++                            Logger.recordOutput("Match/Turret/State", "TOO_CLOSE");
++                        } else {
++                            double angle = Turret.computeTurretAngleRad(pose, target, shot.aimOffsetRad);
++                            tracker.track(angle);
++                            Logger.recordOutput("Match/Turret/State",
++                                    FieldTracking.isOdometryValid() ? "ODOMETRY" : "ODOMETRY_STALE");
++                            Logger.recordOutput("Match/Turret/TargetAngleRad", angle);
++                        }
++                        tracker.apply(turret);
++
++                        String targetName = CompetitionState.isHubTarget() ? "HUB" : "FEEDER";
++                        MatchDashboard.turretState = tooClose
++                                ? targetName + " · muy cerca"
++                                : FieldTracking.isOdometryValid()
++                                        ? targetName + " por odometría"
++                                        : String.format("%s por odometría (%.0fs sin tag)",
++                                                targetName, FieldTracking.secondsSinceUpdate());
++                        MatchDashboard.turretOnTarget = turret.isAtAngle(
++                                tracker.setpoint(), CompetitionConstants.turretOnTargetToleranceRad);
++                        MatchDashboard.turretErrorDeg = Math.toDegrees(
++                                tracker.setpoint() - turret.getAngleRad());
++                        MatchDashboard.shotAimOffsetDeg = Math.toDegrees(shot.aimOffsetRad);
++                    }
++
++                    Logger.recordOutput("Match/Turret/SetpointRad", tracker.setpoint());
++                    Logger.recordOutput("Match/Turret/AimOffsetDeg", Math.toDegrees(shot.aimOffsetRad));
++                    Logger.recordOutput("Match/ShotDistanceMeters", distance);
++
++                    // ═══════════ CARGA ═══════════
++                    if (!charging) {
++                        turret.stopFlywheel();
++                        turret.setHoodAtInitialPosition();
++                        return;
++                    }
++
++                    // Mapas de competencia, con la distancia al objetivo VIRTUAL
++                    // (ya compensada por movimiento). Con la compensación
++                    // apagada es la distancia real, como en Denver.
++                    turret.setHoodForDistance(distance);
++                    turret.setFlywheelVelocityForDistance(distance);
++                },
++                turret)
++                .beforeStarting(() -> tracker.reset(turret.getAngleRad()));
++    }
++}
+diff --git a/src/main/java/frc/robot/commands/demo/DemoIntakeCommands.java b/src/main/java/frc/robot/commands/demo/DemoIntakeCommands.java
+index 1c5af52..a7b1f6c 100644
+--- a/src/main/java/frc/robot/commands/demo/DemoIntakeCommands.java
++++ b/src/main/java/frc/robot/commands/demo/DemoIntakeCommands.java
+@@ -1,13 +1,7 @@
+ package frc.robot.commands.demo;
+ 
+-import org.littletonrobotics.junction.Logger;
+-
+-import edu.wpi.first.math.MathUtil;
+-import edu.wpi.first.wpilibj.Timer;
+ import edu.wpi.first.wpilibj2.command.Command;
+-import edu.wpi.first.wpilibj2.command.Commands;
+-import frc.robot.constants.DemoConstants;
+-import frc.robot.constants.IntakeConstants;
++import frc.robot.commands.IntakeCommands;
+ import frc.robot.subsystems.intake.Intake;
+ 
+ /**
+@@ -19,199 +13,20 @@ public class DemoIntakeCommands {
+     private DemoIntakeCommands() {
+     }
+ 
+-    // ════════════════════════════════════════════════════════════════════════
+-    // AGITACIÓN
+-    // ════════════════════════════════════════════════════════════════════════
+-
+     /**
+-     * Agita la caja para romper puentes de pelotas.
+-     *
+-     * <h2>Fase 1 — Pre-roll ({@code agitatePrerollSeconds}, medio segundo)</h2>
+-     *
+-     * Sólo gira el rodillo, sin mover el extensor. Es para las pelotas que
+-     * quedaron a medio camino en la rampa: si empiezas a sacudir de inmediato,
+-     * esas pelotas salen disparadas hacia afuera en vez de terminar de entrar.
+-     * Medio segundo de rodillo solo las acomoda adentro.
+-     *
+-     * <h2>Fase 2 — Sacudida con envolvente decreciente</h2>
+-     *
+-     * <pre>
+-     *   envolvente(t) = e^(−t / τ)
+-     *   setpoint(t)   = centro(t) + amplitud(t) · sin(2π f t)
+-     * </pre>
+-     *
+-     * El centro converge a la posición cerrada mientras la amplitud se apaga, así
+-     * que la caja termina cerrada con todas las pelotas asentadas. El rodillo
+-     * sigue girando hacia adentro todo el tiempo para barrer de vuelta lo que la
+-     * sacudida empuje hacia afuera.
+-     *
+-     * <p>
+-     * Con los valores por defecto (τ = 2.5 s): a los 0.5 s arranca la sacudida
+-     * oscilando entre 6 y 16 rad, a los 3 s ya está entre 4.3 y 7, y a los 8 s
+-     * está prácticamente cerrada en 4 rad.
++     * Agita la caja para romper puentes de pelotas. La implementación vive en
++     * {@link IntakeCommands#agitate(Intake)}; aquí sólo se delega para que los
++     * bindings del demo no cambien.
+      */
+     public static Command agitate(Intake intake) {
+-        Timer timer = new Timer();
+-
+-        return Commands.runEnd(
+-                () -> {
+-                    double elapsed = timer.get();
+-                    intake.setRollersOpenLoop(DemoConstants.agitateRollerSpeed);
+-
+-                    if (elapsed < DemoConstants.agitatePrerollSeconds) {
+-                        // Fase 1: sólo rodillo. El extensor se queda donde está
+-                        // para no empujar hacia afuera lo que está entrando.
+-                        intake.holdExtensorHere();
+-                        Logger.recordOutput("Demo/Agitate/Phase", "PREROLL");
+-                        return;
+-                    }
+-
+-                    double t = elapsed - DemoConstants.agitatePrerollSeconds;
+-                    double envelope = Math.exp(-t / DemoConstants.agitateDecaySeconds);
+-
+-                    double center = DemoConstants.agitateEndCenterRad
+-                            + (DemoConstants.agitateStartCenterRad - DemoConstants.agitateEndCenterRad)
+-                                    * envelope;
+-                    double amplitude = DemoConstants.agitateAmplitudeRad * envelope;
+-
+-                    double setpoint = center + amplitude
+-                            * Math.sin(2.0 * Math.PI * DemoConstants.agitateFrequencyHz * t);
+-                    setpoint = MathUtil.clamp(
+-                            setpoint, DemoConstants.agitateMinRad, DemoConstants.agitateMaxRad);
+-
+-                    intake.setExtensorPositionRad(setpoint);
+-
+-                    Logger.recordOutput("Demo/Agitate/Phase", "SHAKE");
+-                    Logger.recordOutput("Demo/Agitate/SetpointRad", setpoint);
+-                    Logger.recordOutput("Demo/Agitate/Envelope", envelope);
+-                },
+-                () -> {
+-                    intake.setExtendedReset();
+-                    intake.stopRollers();
+-                    Logger.recordOutput("Demo/Agitate/Phase", "IDLE");
+-                },
+-                intake)
+-                .beforeStarting(timer::restart);
++        return IntakeCommands.agitate(intake);
+     }
+ 
+-    // ════════════════════════════════════════════════════════════════════════
+-    // EXTENSIÓN CON REMATE POR CORRIENTE
+-    // ════════════════════════════════════════════════════════════════════════
+-
+     /**
+-     * Extiende el intake y remata contra el tope mecánico detectándolo por
+-     * corriente.
+-     *
+-     * <h2>El problema que resuelve</h2>
+-     *
+-     * Con un objetivo de posición fijo, si la calibración se corre unos grados
+-     * —porque el encoder arrancó en otro lado, porque el rack se movió, porque
+-     * el ratio del gearbox tiene división entera— el intake se queda corto. Y un
+-     * intake que no sale por completo no traga bien.
+-     *
+-     * <h2>Cómo funciona</h2>
+-     *
+-     * <ol>
+-     * <li><b>Fase rápida:</b> lazo cerrado a {@code extendedRotation}. Recorre
+-     * casi todo el camino en el menor tiempo posible.</li>
+-     * <li><b>Fase de remate:</b> apaga los soft limits y empuja hacia afuera en
+-     * lazo abierto a {@code stallHomingSpeed} (12%). Despacio a propósito: el
+-     * objetivo es sentir el tope, no golpearlo.</li>
+-     * <li><b>Detección:</b> cuando la corriente de estator supera
+-     * {@code stallCurrentAmps} sostenida por {@code stallDebounceSeconds}, es el
+-     * tope. El debounce existe porque el pico de arranque del motor se vería
+-     * igual que un tope.</li>
+-     * <li><b>Retroceso:</b> se despega {@code stallBackoffRad} y se queda ahí en
+-     * lazo cerrado. Dejar el mecanismo forzando su propio tope calienta el motor
+-     * y desgasta el rack.</li>
+-     * </ol>
+-     *
+-     * <p>
+-     * La gran ventaja es que <b>no depende de calibración</b>: el tope mecánico
+-     * está donde está, y el robot lo encuentra solo cada vez.
+-     *
+-     * <p>
+-     * Si {@code IntakeConstants.useStallHoming} está en false, se comporta como
+-     * la extensión de siempre.
++     * Extiende el intake y remata contra el tope mecánico por corriente. Ver
++     * {@link IntakeCommands#extendWithStallHoming(Intake)}.
+      */
+     public static Command extendWithStallHoming(Intake intake) {
+-        Timer phaseTimer = new Timer();
+-        Timer stallTimer = new Timer();
+-        // Índice 0 = fase actual (0 posición, 1 remate, 2 sostener)
+-        int[] phase = { 0 };
+-        double[] holdPosition = { 0.0 };
+-
+-        return Commands.runEnd(
+-                () -> {
+-                    if (!IntakeConstants.useStallHoming) {
+-                        intake.setExtended();
+-                        Logger.recordOutput("Demo/Intake/HomingPhase", "POSITION_ONLY");
+-                        return;
+-                    }
+-
+-                    switch (phase[0]) {
+-                        case 0 -> {
+-                            // Fase rápida: lazo cerrado hasta cerca del tope.
+-                            intake.setExtended();
+-                            Logger.recordOutput("Demo/Intake/HomingPhase", "POSITION");
+-                            boolean closeEnough = intake.getExtensorPositionRad()
+-                                    > IntakeConstants.extendedRotation.getRadians() - 1.0;
+-                            if (closeEnough || phaseTimer.hasElapsed(1.5)) {
+-                                phase[0] = 1;
+-                                phaseTimer.restart();
+-                                stallTimer.reset();
+-                                intake.setSoftwareLimit(false);
+-                            }
+-                        }
+-                        case 1 -> {
+-                            // Remate: empuje lento hasta sentir el tope.
+-                            intake.extendAtSpeed(IntakeConstants.stallHomingSpeed);
+-                            Logger.recordOutput("Demo/Intake/HomingPhase", "SEEKING");
+-
+-                            boolean stalled =
+-                                    intake.getExtensorCurrentAmps() > IntakeConstants.stallCurrentAmps;
+-                            if (stalled) {
+-                                if (!stallTimer.isRunning()) {
+-                                    stallTimer.restart();
+-                                }
+-                            } else {
+-                                stallTimer.stop();
+-                                stallTimer.reset();
+-                            }
+-
+-                            boolean confirmed = stallTimer.isRunning()
+-                                    && stallTimer.hasElapsed(IntakeConstants.stallDebounceSeconds);
+-
+-                            if (confirmed || phaseTimer.hasElapsed(IntakeConstants.stallTimeoutSeconds)) {
+-                                holdPosition[0] = intake.getExtensorPositionRad()
+-                                        - IntakeConstants.stallBackoffRad;
+-                                intake.stopExtensor();
+-                                intake.setSoftwareLimit(true);
+-                                phase[0] = 2;
+-                                Logger.recordOutput("Demo/Intake/StallFoundRad", holdPosition[0]);
+-                                Logger.recordOutput("Demo/Intake/StallConfirmed", confirmed);
+-                            }
+-                        }
+-                        default -> {
+-                            // Sostener despegado del tope.
+-                            intake.setExtensorPositionRad(holdPosition[0]);
+-                            Logger.recordOutput("Demo/Intake/HomingPhase", "HOLDING");
+-                        }
+-                    }
+-                },
+-                () -> {
+-                    // Los soft limits SIEMPRE se restauran, sin importar cómo
+-                    // termine el comando. Si se quedaran apagados, el siguiente
+-                    // jog manual podría destrozar el rack.
+-                    intake.setSoftwareLimit(true);
+-                    intake.stopExtensor();
+-                    Logger.recordOutput("Demo/Intake/HomingPhase", "IDLE");
+-                },
+-                intake)
+-                .beforeStarting(() -> {
+-                    phase[0] = 0;
+-                    phaseTimer.restart();
+-                    stallTimer.reset();
+-                });
++        return IntakeCommands.extendWithStallHoming(intake);
+     }
+ }
+diff --git a/src/main/java/frc/robot/constants/CompetitionConstants.java b/src/main/java/frc/robot/constants/CompetitionConstants.java
+new file mode 100644
+index 0000000..f4f5968
+--- /dev/null
++++ b/src/main/java/frc/robot/constants/CompetitionConstants.java
+@@ -0,0 +1,253 @@
++package frc.robot.constants;
++
++import com.ctre.phoenix6.configs.Slot0Configs;
++
++/**
++ * Todo lo ajustable del robot de COMPETENCIA (v2).
++ *
++ * <p>
++ * Es el equivalente de {@code DemoConstants} para el modo de partido. Lo que
++ * está aquí se probó primero en el demo del StingyCamp y se migró con los
++ * valores cambiados a "modo partido": velocidad completa, aceleraciones más
++ * agresivas y sin las protecciones que sólo tienen sentido con alumnos
++ * alrededor.
++ *
++ * <p>
++ * La física del tiro (tiempo de vuelo, disparo en movimiento, deadbands) NO
++ * está aquí: vive en {@link ShotConstants} porque es la misma en los dos
++ * modos.
++ */
++public final class CompetitionConstants {
++
++    private CompetitionConstants() {
++    }
++
++    // ════════════════════════════════════════════════════════════════════════
++    //
++    //   M A N E J O   —   Smooth Drive a velocidad de partido
++    //
++    // ════════════════════════════════════════════════════════════════════════
++
++    /**
++     * Velocidad máxima de traslación como fracción de
++     * {@code TunerConstants.kSpeedAt12Volts}. 1.0 = todo lo que da el chasis.
++     */
++    public static final double maxSpeedFraction = 1.0;
++
++    /** Fracción de velocidad en modo precisión (LT del piloto). */
++    public static final double precisionSpeedFraction = 0.30;
++
++    /**
++     * Velocidad angular máxima comandada por el stick, en rad/s.
++     *
++     * <p>
++     * El chasis puede dar ~20 rad/s teóricos; nadie los quiere en un stick. 8
++     * rad/s son ~1.3 vueltas por segundo, suficiente para girar rápido sin que
++     * el giro se sienta incontrolable.
++     */
++    public static final double maxAngularSpeedRadPerSec = 8.0;
++
++    /**
++     * Límites de aceleración de traslación, en fracción de velocidad máxima por
++     * segundo (1.0/s = de cero a tope en un segundo).
++     *
++     * <p>
++     * Es la protección de transmisión de la que habla la guía del demo: un
++     * driver experimentado también le da jalones al stick en una final. Con
++     * ~2.5/s el robot llega a tope en 0.4 s, que el driver no nota, y las
++     * llantas no patinan al arrancar. Si el robot se siente "flotado" al
++     * arrancar, súbelo; si patina o el driver se queja de lag, revisa primero
++     * {@code translationSmoothingTau}.
++     */
++    public static final double translationMaxAccel = 2.5;
++
++    /** Desaceleración. Puede ser mayor que la aceleración: frenar no patina igual. */
++    public static final double translationMaxDecel = 4.0;
++
++    /**
++     * Constante de tiempo del suavizado de la tasa, en segundos. Más chico =
++     * responde más rápido. 0.08 s es casi imperceptible en la mano.
++     */
++    public static final double translationSmoothingTau = 0.08;
++
++    public static final double rotationMaxAccel = 8.0;
++    public static final double rotationMaxDecel = 10.0;
++    public static final double rotationSmoothingTau = 0.06;
++
++    /** Deadband del stick, aplicado sobre la MAGNITUD del vector. */
++    public static final double joystickDeadband = 0.08;
++
++    /**
++     * Curva del stick. 1.0 = lineal, 2.0 = cuadrática (lo que usaba Denver).
++     * 1.5 da precisión a baja velocidad sin regalar la mitad del recorrido.
++     */
++    public static final double joystickExponent = 1.5;
++
++    // ════════════════════════════════════════════════════════════════════════
++    //
++    //   R U M B O   A S I S T I D O   (BOMBER: chasis apunta al objetivo)
++    //
++    // ════════════════════════════════════════════════════════════════════════
++    //
++    // Es el controlador del demo, sin cambios de estructura: la salida ya está
++    // en rad/s y NO se re-escala (el bug de Denver era multiplicarla por
++    // getMaxAngularSpeedRadPerSec() ≈ 20 rad/s, que saturaba al instante).
++
++    /** Ganancia proporcional, en rad/s por radián de error. */
++    public static final double headingKp = 3.0;
++
++    /** Ganancia derivativa. Actúa sobre el derivativo FILTRADO. */
++    public static final double headingKd = 0.35;
++
++    /** Filtro del derivativo (0-1). Menor = más filtrado. */
++    public static final double headingDerivativeAlpha = 0.15;
++
++    /** Dentro de esta tolerancia el controlador no comanda nada. */
++    public static final double headingToleranceRad = Math.toRadians(1.0);
++
++    /**
++     * Ancho de la rampa suave arriba de la tolerancia. La salida se escala de 0
++     * a 1 a lo largo de esta zona en vez de cortarse de golpe.
++     */
++    public static final double headingSoftZoneRad = Math.toRadians(3.0);
++
++    /** Velocidad angular máxima que puede pedir la asistencia, en rad/s. */
++    public static final double headingMaxOmegaRadPerSec = 5.0;
++
++    /**
++     * Distancia mínima al objetivo para calcular un rumbo por odometría.
++     * Debajo, centímetros de error de pose son decenas de grados de rumbo.
++     */
++    public static final double headingMinTargetDistanceMeters = 0.8;
++
++    /**
++     * Límite de cambio del rumbo objetivo, en rad/s. Una pose basura de un ciclo
++     * no puede mandar al robot a dar la vuelta.
++     */
++    public static final double headingTargetSlewRadPerSec = 4.0;
++
++    /**
++     * Mientras el piloto gira con el stick, ¿la asistencia cede?
++     *
++     * <p>
++     * {@code true} = si el piloto mueve el stick de giro más de
++     * {@link #headingOverrideThreshold}, la asistencia se apaga ese ciclo y el
++     * giro es manual. Es la válvula de escape si el robot se pone a apuntar a un
++     * HUB imaginario por una pose mala.
++     */
++    public static final boolean headingDriverOverride = true;
++
++    public static final double headingOverrideThreshold = 0.5;
++
++    // ════════════════════════════════════════════════════════════════════════
++    //
++    //   T O R R E T A   —   apuntado continuo por odometría
++    //
++    // ════════════════════════════════════════════════════════════════════════
++    //
++    // En competencia la torreta apunta POR POSE: sabe dónde está el HUB (es una
++    // constante del campo) y dónde está el robot (pose estimator con encoders +
++    // Pigeon + MegaTag2). La Limelight fija ya no ve lo mismo que la torreta,
++    // así que no hay lazo sobre tx: la visión corrige la POSE, no la torreta.
++
++    /**
++     * Filtro del setpoint (0-1). 1.0 = sin filtrar. El ángulo viene de la pose,
++     * que es suave, así que no hace falta filtrar mucho; el filtro sólo lima el
++     * ruido de las correcciones de visión.
++     */
++    public static final double turretSetpointFilterAlpha = 0.6;
++
++    /**
++     * Velocidad máxima a la que se mueve el SETPOINT, en rad/s.
++     *
++     * <p>
++     * Es independiente de la velocidad del mecanismo (Motion Magic). Limita qué
++     * tan rápido puede cambiar lo que se le pide, para que una corrección de
++     * pose de 20° no se convierta en un latigazo. 4 rad/s son ~230°/s: más de lo
++     * que la torreta necesita para seguir el HUB manejando a tope.
++     */
++    public static final double turretMaxSetpointRateRadPerSec = 4.0;
++
++    /**
++     * Cambio mínimo de setpoint para re-comandar el motor, en radianes.
++     *
++     * <p>
++     * Cada setpoint nuevo reinicia el perfil de Motion Magic. 0.15° es
++     * suficientemente chico para que el apuntado no se note escalonado y
++     * suficientemente grande para que el ruido de la pose no lo dispare.
++     */
++    public static final double turretSetpointDeadbandRad = Math.toRadians(0.15);
++
++    /**
++     * Distancia mínima al objetivo para recalcular el ángulo de torreta. Pegado
++     * al HUB se congela el último ángulo bueno.
++     */
++    public static final double turretAimMinDistanceMeters = 0.7;
++
++    /** Tolerancia para declarar "torreta en posición" (LISTO PARA TIRAR). */
++    public static final double turretOnTargetToleranceRad = Math.toRadians(2.0);
++
++    /**
++     * Ganancias del motor de rotación para competencia v2.
++     *
++     * <p>
++     * Sin término integral: el kI = 0.1 de Denver acumulaba error mientras el
++     * perfil de Motion Magic estaba en camino y luego sobrepasaba — cacería de
++     * baja frecuencia. Para SEGUIR un objetivo no hace falta integral; kS y kV
++     * ya cubren la fricción y la velocidad. Son las ganancias del demo con un
++     * poco más de kP porque en partido no hay que ser tan suave.
++     */
++    public static final boolean useV2TurretGains = true;
++
++    public static final Slot0Configs turretGains = new Slot0Configs()
++            .withKP(45.0)
++            .withKI(0.0)
++            .withKD(3.0)
++            .withKS(0.35)
++            .withKV(4.2);
++
++    /** Perfil de Motion Magic de la torreta en partido, en rot/s y rot/s². */
++    public static final double turretCruiseRotPerSec = 2.0;
++    public static final double turretAccelRotPerSecSec = 5.0;
++
++    // ════════════════════════════════════════════════════════════════════════
++    //
++    //   O B J E T I V O S
++    //
++    // ════════════════════════════════════════════════════════════════════════
++
++    /**
++     * Coordenada X del punto de pase (modo FEEDER), por alianza.
++     *
++     * <p>
++     * En FEEDER el objetivo es un punto sobre la línea de la alianza a la misma Y
++     * del robot: el robot "tira hacia su pared". Son los mismos números que
++     * usaba Denver.
++     */
++    public static final double feederTargetXBlue = 2.0;
++    public static final double feederTargetXRed = 14.0;
++
++    // ════════════════════════════════════════════════════════════════════════
++    //
++    //   C Á M A R A   D E   P I L O T O   (HBVCAM por USB al roboRIO)
++    //
++    // ════════════════════════════════════════════════════════════════════════
++    //
++    // Una cámara USB en el roboRIO NO sirve para AprilTags: el Rio no tiene
++    // CPU para detectarlos a una tasa útil sin tirar el loop del robot. Aquí es
++    // sólo video para el piloto en Elastic. Si algún día va a un Orange Pi con
++    // PhotonVision, se conecta con VisionIOPhotonVision y pasa a ser fuente de
++    // odometría.
++
++    /** Arrancar el stream de la cámara USB del roboRIO. */
++    public static final boolean useDriverCamera = true;
++
++    /**
++     * Resolución y FPS del stream. Bajos a propósito: el FMS limita el ancho de
++     * banda a 4 Mbps y el Rio comprime en software. 320x240 a 15 fps ronda 1
++     * Mbps y cuesta ~10% de CPU.
++     */
++    public static final int driverCameraWidth = 320;
++    public static final int driverCameraHeight = 240;
++    public static final int driverCameraFps = 15;
++}
+diff --git a/src/main/java/frc/robot/constants/DemoConstants.java b/src/main/java/frc/robot/constants/DemoConstants.java
+index 08cedbc..d56cfc3 100644
+--- a/src/main/java/frc/robot/constants/DemoConstants.java
++++ b/src/main/java/frc/robot/constants/DemoConstants.java
+@@ -17,6 +17,16 @@ import edu.wpi.first.math.interpolation.InterpolatingDoubleTreeMap;
+  */
+ public class DemoConstants {
+ 
++    // ────────────────────────────────────────────────────────────────────────
++    // NOTA (Competencia v2): las constantes de física del tiro
++    // (kTimeOfFlightMap, shootWhileMoving*, deadbands, fieldVelocityFilterAlpha,
++    // odometryTrustSeconds), las de agitación del intake y las de la Limelight 4
++    // ya NO se editan aquí. Viven en ShotConstants, IntakeConstants y
++    // VisionConstants, y este archivo sólo las re-exporta con el mismo nombre
++    // para que el código y la guía del demo sigan siendo válidos. Edítalas en su
++    // archivo de origen: cambiarlas aquí no compila (son final).
++    // ────────────────────────────────────────────────────────────────────────
++
+     // ════════════════════════════════════════════════════════════════════════
+     // SMOOTH DRIVE SYSTEM
+     // ════════════════════════════════════════════════════════════════════════
+@@ -157,7 +167,7 @@ public class DemoConstants {
+      * convención WPILib "+Y = izquierda". Si al mover la torreta a la izquierda
+      * la pose estimada se va a la derecha, pon esto en {@code true}.
+      */
+-    public static final boolean limelightInvertSideAxis = false;
++    public static final boolean limelightInvertSideAxis = VisionConstants.limelightInvertSideAxis;
+ 
+     /**
+      * Signo del ángulo de torreta al construir la transformada robot→cámara.
+@@ -182,23 +192,12 @@ public class DemoConstants {
+     // ── Modelo de cámara ───────────────────────────────────────────────────
+ 
+     /**
+-     * ¿Es una Limelight 4?
+-     *
+-     * <p>
+-     * {@code false} = Limelight 2 / 2+ / 3. Es lo que tenemos montado.
+-     *
+-     * <p>
+-     * Con esto en false, el código no escribe las claves de NetworkTables que
+-     * sólo existen en la LL4 ({@code imumode_set}, {@code throttle_set}).
+-     * Escribirlas en una LL2 no rompe nada — simplemente las ignora — pero deja
+-     * basura en la tabla que confunde cuando alguien anda depurando.
+-     *
+-     * <p>
+-     * Todo lo demás que usa el demo ({@code camerapose_robotspace_set},
+-     * {@code priorityid}, {@code tl}/{@code cl}) funciona igual en la LL2
+-     * siempre que tenga LimelightOS 2024 o más reciente.
++     * ¿Es una Limelight 4? <b>Alias de {@code VisionConstants.isLimelight4}</b>
++     * (la cámara física es la misma en demo y competencia; hoy es una LL4). En
++     * demo la cámara va en la torreta, así que su IMU interna se fuerza a modo
++     * externo ({@code limelight4ImuMode = 0}).
+      */
+-    public static final boolean isLimelight4 = false;
++    public static final boolean isLimelight4 = VisionConstants.isLimelight4;
+ 
+     // ── Limelight 4 (inactivo mientras isLimelight4 sea false) ─────────────
+ 
+@@ -222,7 +221,7 @@ public class DemoConstants {
+      * Si algún día regresan la cámara a un montaje fijo, el modo 4 con
+      * {@code imuAssistAlpha} vale mucho la pena.
+      */
+-    public static final int limelight4ImuMode = 0;
++    public static final int limelight4ImuMode = VisionConstants.limelight4ImuMode;
+ 
+     /**
+      * Throttle de la LL4 mientras el robot está deshabilitado.
+@@ -233,10 +232,10 @@ public class DemoConstants {
+      * de lo que parece en una demo: el robot pasa mucho más tiempo deshabilitado
+      * en un pasillo que en una cancha.
+      */
+-    public static final int limelight4ThrottleDisabled = 150;
++    public static final int limelight4ThrottleDisabled = VisionConstants.limelight4ThrottleDisabled;
+ 
+     /** Throttle con el robot habilitado. 0 = máximo rendimiento. */
+-    public static final int limelight4ThrottleEnabled = 0;
++    public static final int limelight4ThrottleEnabled = VisionConstants.limelight4ThrottleEnabled;
+ 
+     /**
+      * Usar {@code priorityid} para el modo de tag fijado.
+@@ -916,26 +915,26 @@ public class DemoConstants {
+     // ════════════════════════════════════════════════════════════════════════
+ 
+     /** Posición central de la oscilación al inicio (radianes de extensor). */
+-    public static final double agitateStartCenterRad = 11.0;
++    public static final double agitateStartCenterRad = IntakeConstants.agitateStartCenterRad;
+ 
+     /** Posición a la que converge la caja al final. */
+-    public static final double agitateEndCenterRad = 4.0;
++    public static final double agitateEndCenterRad = IntakeConstants.agitateEndCenterRad;
+ 
+     /** Amplitud inicial de la oscilación. */
+-    public static final double agitateAmplitudeRad = 7.5;
++    public static final double agitateAmplitudeRad = IntakeConstants.agitateAmplitudeRad;
+ 
+     /** Frecuencia de la agitación. */
+-    public static final double agitateFrequencyHz = 1.2;
++    public static final double agitateFrequencyHz = IntakeConstants.agitateFrequencyHz;
+ 
+     /**
+      * Constante de tiempo del decaimiento. La amplitud cae a ~37% en este
+      * tiempo, y a ~5% en 3× este tiempo. Con 2.5 s, la caja está prácticamente
+      * cerrada a los 7.5 s.
+      */
+-    public static final double agitateDecaySeconds = 10;
++    public static final double agitateDecaySeconds = IntakeConstants.agitateDecaySeconds;
+ 
+     /** Velocidad del rodillo durante la agitación. Lento, hacia adentro. */
+-    public static final double agitateRollerSpeed = 0.375;
++    public static final double agitateRollerSpeed = IntakeConstants.agitateRollerSpeed;
+ 
+     /**
+      * Pre-roll: cuánto gira el rodillo ANTES de empezar a sacudir.
+@@ -946,14 +945,14 @@ public class DemoConstants {
+      * de terminar de entrar. Medio segundo de rodillo solo las acomoda adentro y
+      * después ya se puede agitar sin perder nada.
+      */
+-    public static final double agitatePrerollSeconds = 1.5;
++    public static final double agitatePrerollSeconds = IntakeConstants.agitatePrerollSeconds;
+ 
+     /** Límites duros. Deben quedar dentro de los soft limits del extensor. */
+-    public static final double agitateMinRad = 3.0;
+-    public static final double agitateMaxRad = 17.0;
++    public static final double agitateMinRad = IntakeConstants.agitateMinRad;
++    public static final double agitateMaxRad = IntakeConstants.agitateMaxRad;
+ 
+     /** Si es true, la agitación arranca sola al alimentar (LB/RB). */
+-    public static final boolean autoAgitateWhileFeeding = true;
++    public static final boolean autoAgitateWhileFeeding = IntakeConstants.autoAgitateWhileFeeding;
+ 
+     // ════════════════════════════════════════════════════════════════════════
+     // DISPARO SUAVE (STRIKER — hacia personas)
+@@ -1016,7 +1015,7 @@ public class DemoConstants {
+     }
+ 
+     /** Distancia asumida cuando no hay medición de visión disponible. */
+-    public static final double fallbackDistanceMeters = 3.0;
++    public static final double fallbackDistanceMeters = ShotConstants.fallbackDistanceMeters;
+ 
+     /**
+      * Rango físicamente sensato de distancia de tiro, en metros.
+@@ -1027,9 +1026,9 @@ public class DemoConstants {
+      * escalón: pasar de 0.51 a 0.49 m saltaba la potencia de la mínima a la de
+      * 3 m en un ciclo. El fallback quedó sólo para NaN.
+      */
+-    public static final double minShotDistanceMeters = 0.5;
++    public static final double minShotDistanceMeters = ShotConstants.minShotDistanceMeters;
+ 
+-    public static final double maxShotDistanceMeters = 12.0;
++    public static final double maxShotDistanceMeters = ShotConstants.maxShotDistanceMeters;
+ 
+     // ════════════════════════════════════════════════════════════════════════
+     //
+@@ -1065,7 +1064,7 @@ public class DemoConstants {
+      * empeorar los tiros en vez de mejorarlos. Enciéndelo cuando vayas a tunear,
+      * con el procedimiento de la guía.
+      */
+-    public static final boolean shootWhileMovingEnabled = true;
++    public static final boolean shootWhileMovingEnabled = ShotConstants.shootWhileMovingEnabled;
+ 
+     /**
+      * Ganancia de la compensación. 1.0 = compensación teórica completa.
+@@ -1076,10 +1075,10 @@ public class DemoConstants {
+      * lateralmente los tiros se van MÁS al lado en vez de corregirse, el signo
+      * está al revés y hay que revisarlo antes de seguir subiendo.
+      */
+-    public static final double shootWhileMovingGain = 1.0;
++    public static final double shootWhileMovingGain = ShotConstants.shootWhileMovingGain;
+ 
+     /** Bajo esta velocidad no se compensa nada. Evita ruido en reposo. */
+-    public static final double shootWhileMovingMinSpeed = 0.1;
++    public static final double shootWhileMovingMinSpeed = ShotConstants.shootWhileMovingMinSpeed;
+ 
+     /**
+      * Signo de la corrección angular. <b>Aquí se invierte, y sólo aquí.</b>
+@@ -1113,7 +1112,7 @@ public class DemoConstants {
+      * si una está invertida, esta constante lo tapa aquí pero el problema sigue
+      * vivo en otro lado.
+      */
+-    public static final double shootWhileMovingAimSign = 1.0;
++    public static final double shootWhileMovingAimSign = ShotConstants.shootWhileMovingAimSign;
+ 
+     /**
+      * Iteraciones de convergencia.
+@@ -1122,7 +1121,7 @@ public class DemoConstants {
+      * Mover el objetivo cambia la distancia, y la distancia cambia el tiempo de
+      * vuelo. Dos iteraciones convergen de sobra a distancias de FRC.
+      */
+-    public static final int shootWhileMovingIterations = 2;
++    public static final int shootWhileMovingIterations = ShotConstants.shootWhileMovingIterations;
+ 
+     /**
+      * Tope de la corrección, en metros.
+@@ -1131,7 +1130,7 @@ public class DemoConstants {
+      * Red de seguridad: si la velocidad estimada viene basura, sin esto la
+      * torreta se iría a apuntar a un punto absurdo.
+      */
+-    public static final double shootWhileMovingMaxCompensationMeters = 2.5;
++    public static final double shootWhileMovingMaxCompensationMeters = ShotConstants.shootWhileMovingMaxCompensationMeters;
+ 
+     /**
+      * Tope de la corrección, ahora en ÁNGULO.
+@@ -1148,7 +1147,7 @@ public class DemoConstants {
+      * de vuelo, a 5 m del HUB, la corrección teórica ronda los 17°— y sigue
+      * siendo un tope que se nota si algo sale mal.
+      */
+-    public static final double shootWhileMovingMaxAimOffsetRad = Math.toRadians(20.0);
++    public static final double shootWhileMovingMaxAimOffsetRad = ShotConstants.shootWhileMovingMaxAimOffsetRad;
+ 
+     /**
+      * Filtro de la velocidad de campo. 1.0 = sin filtrar.
+@@ -1165,7 +1164,7 @@ public class DemoConstants {
+      * dirección de verdad. Si la compensación tiembla, bájalo; si se siente
+      * retrasada al arrancar y frenar, súbelo.
+      */
+-    public static final double fieldVelocityFilterAlpha = 0.2;
++    public static final double fieldVelocityFilterAlpha = ShotConstants.fieldVelocityFilterAlpha;
+ 
+     /**
+      * Deadband del setpoint del hood, en grados.
+@@ -1181,10 +1180,10 @@ public class DemoConstants {
+      * odometría cambia despacio. Con la compensación encendida la distancia se
+      * mueve con la velocidad del robot, y sin este deadband el hood baila.
+      */
+-    public static final double hoodSetpointDeadbandDeg = 0.25;
++    public static final double hoodSetpointDeadbandDeg = ShotConstants.hoodSetpointDeadbandDeg;
+ 
+     /** Deadband del setpoint del flywheel, en RPS. Misma razón que el hood. */
+-    public static final double flywheelSetpointDeadbandRPS = 0.25;
++    public static final double flywheelSetpointDeadbandRPS = ShotConstants.flywheelSetpointDeadbandRPS;
+ 
+     /**
+      * Tiempo de vuelo de la pelota por distancia, en segundos.
+@@ -1207,14 +1206,7 @@ public class DemoConstants {
+      * las velocidades de {@code kShooterFlywheelMap}: crece con la distancia
+      * porque la pelota recorre más y va perdiendo velocidad.
+      */
+-    public static final InterpolatingDoubleTreeMap kTimeOfFlightMap = new InterpolatingDoubleTreeMap();
+-    static {
+-        kTimeOfFlightMap.put(1.0, 0.40);
+-        kTimeOfFlightMap.put(2.0, 0.53);
+-        kTimeOfFlightMap.put(3.0, 0.67);
+-        kTimeOfFlightMap.put(4.0, 0.81);
+-        kTimeOfFlightMap.put(5.0, 0.95);
+-    }
++    public static final InterpolatingDoubleTreeMap kTimeOfFlightMap = ShotConstants.kTimeOfFlightMap;
+ 
+     // ════════════════════════════════════════════════════════════════════════
+     //
+@@ -1337,7 +1329,7 @@ public class DemoConstants {
+      * barrer: sigue apuntando por odometría. Un swerve con Pigeon 2.0 deriva muy
+      * poco en unos segundos, así que ser generoso aquí sale barato.
+      */
+-    public static final double odometryTrustSeconds = 8.0;
++    public static final double odometryTrustSeconds = ShotConstants.odometryTrustSeconds;
+ 
+     /**
+      * Elegir el HUB según la alianza que reporte la Driver Station.
+diff --git a/src/main/java/frc/robot/constants/IntakeConstants.java b/src/main/java/frc/robot/constants/IntakeConstants.java
+index 1f386de..dba2f37 100644
+--- a/src/main/java/frc/robot/constants/IntakeConstants.java
++++ b/src/main/java/frc/robot/constants/IntakeConstants.java
+@@ -110,4 +110,47 @@ public class IntakeConstants {
+      * desgasta el rack. Esto lo despega apenas.
+      */
+     public static final double stallBackoffRad = 0.3;
++
++    // ════════════════════════════════════════════════════════════════════════
++    //  A G I T A C I Ó N   D E   L A   C A J A
++    //
++    //  Sacudida del extensor con envolvente decreciente para romper puentes de
++    //  pelotas. La usan competencia y demo por igual (antes vivía en
++    //  DemoConstants; ahí quedan alias con el mismo nombre).
++    //
++    //      envolvente(t) = e^(−t / τ)
++    //      setpoint(t)   = centro(t) + amplitud(t) · sin(2π f t)
++    // ════════════════════════════════════════════════════════════════════════
++
++    /** Posición central de la oscilación al inicio (radianes de extensor). */
++    public static final double agitateStartCenterRad = 11.0;
++
++    /** Posición a la que converge la caja al final. */
++    public static final double agitateEndCenterRad = 4.0;
++
++    /** Amplitud inicial de la oscilación. */
++    public static final double agitateAmplitudeRad = 7.5;
++
++    /** Frecuencia de la agitación. */
++    public static final double agitateFrequencyHz = 1.2;
++
++    /** Constante de tiempo del decaimiento (la amplitud cae a ~37% en este tiempo). */
++    public static final double agitateDecaySeconds = 10;
++
++    /** Velocidad del rodillo durante la agitación. Lento, hacia adentro. */
++    public static final double agitateRollerSpeed = 0.375;
++
++    /**
++     * Pre-roll: cuánto gira el rodillo ANTES de empezar a sacudir, para que las
++     * pelotas a medio camino en la rampa terminen de entrar en vez de salir
++     * disparadas con la primera sacudida.
++     */
++    public static final double agitatePrerollSeconds = 1.5;
++
++    /** Límites duros. Deben quedar dentro de los soft limits del extensor. */
++    public static final double agitateMinRad = 3.0;
++    public static final double agitateMaxRad = 17.0;
++
++    /** Si es true, la agitación arranca sola al alimentar (LB/RB). */
++    public static final boolean autoAgitateWhileFeeding = true;
+ }
+\ No newline at end of file
+diff --git a/src/main/java/frc/robot/constants/RobotConstants.java b/src/main/java/frc/robot/constants/RobotConstants.java
+index 46db711..92718da 100644
+--- a/src/main/java/frc/robot/constants/RobotConstants.java
++++ b/src/main/java/frc/robot/constants/RobotConstants.java
+@@ -26,6 +26,24 @@ public class RobotConstants {
+         NORMAL
+     }
+ 
++    // ════════════════════════════════════════════════════════════════════════
++    // COMPETENCIA v2
++    // ════════════════════════════════════════════════════════════════════════
++
++    /**
++     * A qué le apunta el robot en competencia. Alterna con Back del operador.
++     *
++     * <ul>
++     * <li><b>HUB</b> — el HUB de la alianza (posición fija del campo).</li>
++     * <li><b>FEEDER</b> — un punto sobre la línea de la alianza a la misma Y del
++     * robot: pases hacia la zona de la propia alianza.</li>
++     * </ul>
++     */
++    public static enum CompetitionTarget {
++        HUB,
++        FEEDER
++    }
++
+     // ════════════════════════════════════════════════════════════════════════
+     // DEMO MODE
+     // ════════════════════════════════════════════════════════════════════════
+@@ -41,10 +59,14 @@ public class RobotConstants {
+      * sin ningún cambio de comportamiento.
+      *
+      * <p>
+-     * Nada del código de competencia fue borrado ni modificado. Cambiar esta
+-     * línea a {@code false} y desplegar te devuelve el robot de temporada.
++     * Con {@code false} se carga <b>Competencia v2</b>
++     * ({@code RobotContainer.configureCompetitionBindings}): el flujo de
++     * operación del demo (seleccionar modo → apuntar/cargar → alimentar) con
++     * Smooth Drive a velocidad de partido, torreta por odometría y la Limelight
++     * 4 fija. Los bindings originales de Denver siguen en
++     * {@code configureDenverBindings()} por si hay que volver a ellos.
+      */
+-    public static final boolean isDemoMode = true;
++    public static final boolean isDemoMode = false;
+ 
+     /**
+      * Un solo control para todo.
+diff --git a/src/main/java/frc/robot/constants/ShotConstants.java b/src/main/java/frc/robot/constants/ShotConstants.java
+new file mode 100644
+index 0000000..fcb1b42
+--- /dev/null
++++ b/src/main/java/frc/robot/constants/ShotConstants.java
+@@ -0,0 +1,165 @@
++package frc.robot.constants;
++
++import edu.wpi.first.math.interpolation.InterpolatingDoubleTreeMap;
++
++/**
++ * Física del tiro compartida por COMPETENCIA y DEMO.
++ *
++ * <p>
++ * Estas constantes las consumen {@code ShotSolution}, {@code Shooter} y
++ * {@code Drive}, que corren en los dos modos. Antes vivían en
++ * {@code DemoConstants}, y eso hacía que el robot de competencia dependiera del
++ * demo para saber cuánto tarda en volar una pelota. Ahora viven aquí y
++ * {@code DemoConstants} sólo las re-exporta con el mismo nombre, para que la
++ * guía del demo y su código sigan siendo válidos sin cambiar una línea.
++ *
++ * <p>
++ * Regla: si una constante describe la <b>pelota o el mecanismo</b> (tiempo de
++ * vuelo, deadbands de setpoint, rango de distancias), va aquí. Si describe
++ * <b>cómo se comporta el robot en un modo</b> (velocidades de manejo, ganancias
++ * de rumbo, barrido de la torreta), va en {@code CompetitionConstants} o en
++ * {@code DemoConstants}.
++ */
++public final class ShotConstants {
++
++    private ShotConstants() {
++    }
++
++    // ════════════════════════════════════════════════════════════════════════
++    // Rango de distancias
++    // ════════════════════════════════════════════════════════════════════════
++
++    /** Distancia asumida cuando la medición vino NaN. Sólo para ese caso. */
++    public static final double fallbackDistanceMeters = 3.0;
++
++    /**
++     * Rango físicamente sensato de distancia de tiro, en metros.
++     *
++     * <p>
++     * Fuera de este rango la distancia se <b>recorta</b> al borde, no se
++     * sustituye. Sustituirla por el fallback volvía el borde un escalón: pasar de
++     * 0.51 a 0.49 m saltaba la potencia de la mínima a la de 3 m en un ciclo.
++     */
++    public static final double minShotDistanceMeters = 0.5;
++
++    public static final double maxShotDistanceMeters = 12.0;
++
++    // ════════════════════════════════════════════════════════════════════════
++    // Tiempo de vuelo
++    // ════════════════════════════════════════════════════════════════════════
++
++    /**
++     * Tiempo de vuelo de la pelota por distancia, en segundos.
++     *
++     * <p>
++     * <b>Es lo único que hay que medir para que el disparo en movimiento
++     * funcione bien.</b> Graba un tiro estático desde el costado a 60 fps, cuenta
++     * los cuadros entre que la pelota sale del shooter y toca el HUB, y divide
++     * entre 60. Repite a 2, 3, 4 y 5 m.
++     *
++     * <p>
++     * Los valores actuales son una estimación para un tiro en arco a las
++     * velocidades de {@code ShooterConstants.kShooterFlywheelMap}. Crece con la
++     * distancia porque la pelota recorre más y va perdiendo velocidad.
++     */
++    public static final InterpolatingDoubleTreeMap kTimeOfFlightMap = new InterpolatingDoubleTreeMap();
++    static {
++        kTimeOfFlightMap.put(1.0, 0.40);
++        kTimeOfFlightMap.put(2.0, 0.53);
++        kTimeOfFlightMap.put(3.0, 0.67);
++        kTimeOfFlightMap.put(4.0, 0.81);
++        kTimeOfFlightMap.put(5.0, 0.95);
++    }
++
++    // ════════════════════════════════════════════════════════════════════════
++    // Disparo en movimiento (objetivo virtual)
++    // ════════════════════════════════════════════════════════════════════════
++    //
++    //     objetivoVirtual = objetivoReal − velocidad × tiempoDeVuelo
++    //
++    // El ángulo se consume como DELTA (ShotSolution.aimOffsetRad) y la distancia
++    // al objetivo virtual va a los mapas de hood y flywheel. Ver ShotSolution.
++
++    /**
++     * Interruptor maestro del disparo en movimiento.
++     *
++     * <p>
++     * Quedó encendido desde la última iteración del demo. <b>Verifícalo en el
++     * robot antes de competir</b> con el procedimiento de la guía: manejando a
++     * la derecha frente al HUB, {@code Shot/AimOffsetDeg} (y {@code Match/Turret/AimOffsetDeg}, lo que la torreta aplicó) debe ser
++     * positivo. Si dudas, apágalo: con esto en false el robot tira exactamente
++     * como en Denver.
++     */
++    public static final boolean shootWhileMovingEnabled = true;
++
++    /** Ganancia. 1.0 = compensación teórica completa. Se sube de 0.2 en 0.2. */
++    public static final double shootWhileMovingGain = 1.0;
++
++    /** Bajo esta velocidad (m/s) no se compensa nada. Evita ruido en reposo. */
++    public static final double shootWhileMovingMinSpeed = 0.1;
++
++    /**
++     * Signo de la corrección angular. <b>Aquí se invierte, y sólo aquí.</b>
++     *
++     * <p>
++     * Con {@code 1.0}, moverte a la derecha corre el apuntado a la izquierda.
++     * Antes de invertirlo mira el número: si {@code AimOffsetDeg} sale POSITIVO
++     * manejando a la derecha y los tiros aún se van a la derecha, el signo está
++     * bien y falta ganancia. Si sale NEGATIVO, pon {@code -1.0} aquí.
++     */
++    public static final double shootWhileMovingAimSign = 1.0;
++
++    /** Iteraciones de convergencia del objetivo virtual. Dos sobran en FRC. */
++    public static final int shootWhileMovingIterations = 2;
++
++    /** Tope de la corrección, en metros. Red de seguridad contra velocidad basura. */
++    public static final double shootWhileMovingMaxCompensationMeters = 2.5;
++
++    /**
++     * Tope de la corrección, en ángulo.
++     *
++     * <p>
++     * 2.5 m son ~15° a 9 m pero más de 60° a 2 m. Este tope evita que la torreta
++     * se vaya a medio campo cuando estás pegado al HUB.
++     */
++    public static final double shootWhileMovingMaxAimOffsetRad = Math.toRadians(20.0);
++
++    // ════════════════════════════════════════════════════════════════════════
++    // Filtros y deadbands de mecanismo
++    // ════════════════════════════════════════════════════════════════════════
++
++    /**
++     * Filtro pasa-bajas de la velocidad de campo. 1.0 = sin filtrar.
++     *
++     * <p>
++     * A 50 Hz la constante de tiempo es {@code 0.02/alpha}: 0.2 son ~100 ms. Si
++     * la compensación tiembla, bájalo; si se siente retrasada al arrancar y
++     * frenar, súbelo.
++     */
++    public static final double fieldVelocityFilterAlpha = 0.2;
++
++    /**
++     * Deadband del setpoint del hood, en grados.
++     *
++     * <p>
++     * Cada setpoint nuevo reinicia el perfil de Motion Magic. Re-comandar a 50 Hz
++     * con cambios de milésimas de grado hace que el perfil nunca se complete y el
++     * mecanismo tiemble en su lugar.
++     */
++    public static final double hoodSetpointDeadbandDeg = 0.25;
++
++    /** Deadband del setpoint del flywheel, en RPS. Misma razón que el hood. */
++    public static final double flywheelSetpointDeadbandRPS = 0.25;
++
++    /**
++     * Cuánto tiempo se le sigue creyendo a la odometría sin una corrección de
++     * visión aceptada, en segundos.
++     *
++     * <p>
++     * En competencia la Limelight ve tags casi todo el tiempo y esto casi nunca
++     * expira. Cuando expira, el dashboard lo avisa ("ODOMETRÍA VIEJA") pero la
++     * torreta <b>sigue apuntando por odometría</b>: un swerve con Pigeon 2.0
++     * deriva poco y disparar a la última pose conocida es mejor que no disparar.
++     */
++    public static final double odometryTrustSeconds = 8.0;
++}
+diff --git a/src/main/java/frc/robot/constants/VisionConstants.java b/src/main/java/frc/robot/constants/VisionConstants.java
+index 5695707..59af4e4 100644
+--- a/src/main/java/frc/robot/constants/VisionConstants.java
++++ b/src/main/java/frc/robot/constants/VisionConstants.java
+@@ -21,13 +21,123 @@ public class VisionConstants {
+   public static String LimelightFixedCamera = "limelight-fixed";
+   public static String camera1Name = "camera_1";
+ 
+-  // Robot to camera transforms
+-  // (Not used by Limelight, configure in web UI instead)
++  // ══════════════════════════════════════════════════════════════════════════
++  // Limelight 4 fija (competencia)
++  // ══════════════════════════════════════════════════════════════════════════
++
++  /**
++   * Transformada robot → Limelight fija, en el marco del robot.
++   *
++   * <p>
++   * Convención WPILib: +X hacia adelante, +Y hacia la izquierda, +Z hacia
++   * arriba; rotación (roll, pitch, yaw) en radianes, pitch NEGATIVO = mirando
++   * hacia arriba.
++   *
++   * <p>
++   * <b>La cámara va montada en el cañón fijo, que dispara hacia ATRÁS del
++   * robot</b>, así que su yaw es π (mira por donde salen las pelotas). En
++   * competencia el código publica esta transformada a la Limelight al arrancar
++   * ({@code camerapose_robotspace_set}), así que <b>en la web UI la pose de
++   * cámara debe quedar en ceros</b>: si dejas valores ahí se suman a éstos y todo
++   * queda corrido.
++   *
++   * <p>
++   * <b>TODO — medir con cinta</b> desde el centro del robot (centro del
++   * cuadrado que forman las cuatro ruedas) hasta el lente, y el ángulo de
++   * inclinación con un nivel digital. Los valores actuales son una estimación
++   * de la posición anterior de la LL2 con el yaw corregido. Cómo verificarlo:
++   * con el robot quieto viendo un tag del HUB, {@code Vision/Camera0/RobotPoses}
++   * en AdvantageScope debe caer encima de {@code Odometry/Robot}; si la pose de
++   * visión aparece corrida hacia un lado fijo, la traslación está mal; si se
++   * mueve al girar el robot, el yaw está mal.
++   */
+   public static Transform3d robotToLimelightFixed =
+-      new Transform3d(0.2, 0.0, 0.2, new Rotation3d(0.0, -0.4, 0.0));
++      new Transform3d(-0.25, 0.0, 0.25, new Rotation3d(0.0, Math.toRadians(-20.0), Math.PI));
++
++  /**
++   * Publicar {@link #robotToLimelightFixed} desde el código al arrancar.
++   *
++   * <p>
++   * {@code true} = la constante de arriba manda y la web UI debe estar en ceros.
++   * {@code false} = se respeta lo que esté configurado en la web UI (la forma
++   * de siempre en Denver).
++   */
++  public static boolean publishFixedCameraTransform = true;
++
++  /**
++   * Invierte el signo del eje Y al publicar la pose de cámara a la Limelight.
++   * Algunas versiones de firmware usan "side positive = derecha". Si la pose
++   * estimada se corre hacia el lado contrario, pon esto en {@code true}.
++   */
++  public static boolean limelightInvertSideAxis = false;
++
++  /**
++   * ¿Es una Limelight 4?
++   *
++   * <p>
++   * {@code true} = se escriben las claves que sólo existen en la LL4
++   * ({@code imumode_set}, {@code throttle_set}) y se gestiona su IMU interna.
++   * En una LL2/2+/3 ponlo en false: escribirlas no rompe nada pero deja basura
++   * en la tabla.
++   */
++  public static boolean isLimelight4 = true;
++
++  /**
++   * Modo de IMU de la LL4 <b>mientras el robot está deshabilitado</b>.
++   *
++   * <p>
++   * Valores según la API de Limelight: 0 = IMU externa; 1 = IMU externa y
++   * siembra la interna; 2 = IMU interna; 3 = interna con convergencia asistida
++   * por MegaTag1; 4 = interna con convergencia asistida por la IMU externa.
++   *
++   * <p>
++   * Deshabilitado se usa <b>1</b>: la LL toma el yaw del Pigeon que publicamos
++   * en {@code robot_orientation_set} y con él siembra su IMU interna, para que
++   * al habilitar ya esté alineada con la odometría.
++   */
++  public static int limelight4ImuModeDisabled = 1;
++
++  /**
++   * Modo de IMU de la LL4 <b>mientras el robot está habilitado</b>.
++   *
++   * <p>
++   * <b>4</b> = IMU interna con el Pigeon como asistencia lenta. La interna tiene
++   * menos latencia que el yaw que le mandamos por NetworkTables y hace que
++   * MegaTag2 aguante mejor los giros rápidos; el Pigeon evita que derive.
++   * Si ves que la pose de visión se va girando sola, cambia a <b>0</b> (sólo
++   * Pigeon, el comportamiento de la LL2).
++   */
++  public static int limelight4ImuModeEnabled = 4;
++
++  /**
++   * Modo de IMU único (alias de compatibilidad para el demo). El demo usa la
++   * cámara en la torreta, donde la IMU interna gira con el mecanismo y por eso
++   * ahí se fuerza a externa (0).
++   */
++  public static int limelight4ImuMode = 0;
++
++  /**
++   * Frames a saltar entre procesados mientras el robot está deshabilitado.
++   * Gestión térmica: la LL4 consume hasta 12 W y se calienta en el pit.
++   */
++  public static int limelight4ThrottleDisabled = 150;
++
++  /** Frames a saltar habilitado. 0 = procesar todos. */
++  public static int limelight4ThrottleEnabled = 0;
++
++  // ══════════════════════════════════════════════════════════════════════════
++  // Otras cámaras
++  // ══════════════════════════════════════════════════════════════════════════
++
++  // Robot to camera transforms for PhotonVision cameras (a coprocessor camera,
++  // e.g. the HBVCAM on an Orange Pi running PhotonVision, would go here).
+   public static Transform3d robotToCamera1 =
+       new Transform3d(-0.2, 0.0, 0.2, new Rotation3d(0.0, -0.4, Math.PI));
+ 
++  // ══════════════════════════════════════════════════════════════════════════
++  // Filtrado de observaciones de pose
++  // ══════════════════════════════════════════════════════════════════════════
++
+   // Basic filtering thresholds
+   public static double maxAmbiguity = 0.3;
+   public static double maxZError = 0.75;
+diff --git a/src/main/java/frc/robot/subsystems/drive/Drive.java b/src/main/java/frc/robot/subsystems/drive/Drive.java
+index e491b59..c69b01a 100644
+--- a/src/main/java/frc/robot/subsystems/drive/Drive.java
++++ b/src/main/java/frc/robot/subsystems/drive/Drive.java
+@@ -42,7 +42,7 @@ import edu.wpi.first.wpilibj.smartdashboard.SmartDashboard;
+ import edu.wpi.first.wpilibj2.command.Command;
+ import edu.wpi.first.wpilibj2.command.SubsystemBase;
+ import edu.wpi.first.wpilibj2.command.sysid.SysIdRoutine;
+-import frc.robot.constants.DemoConstants;
++import frc.robot.constants.ShotConstants;
+ import frc.robot.constants.RobotConstants;
+ import frc.robot.constants.TunerConstants;
+ import frc.robot.constants.RobotConstants.DriveMode;
+@@ -262,7 +262,7 @@ public class Drive extends SubsystemBase {
+       return;
+     }
+ 
+-    double alpha = MathUtil.clamp(DemoConstants.fieldVelocityFilterAlpha, 0.0, 1.0);
++    double alpha = MathUtil.clamp(ShotConstants.fieldVelocityFilterAlpha, 0.0, 1.0);
+     filteredFieldVelocity =
+         filteredFieldVelocity.plus(measured.minus(filteredFieldVelocity).times(alpha));
+ 
+diff --git a/src/main/java/frc/robot/subsystems/shooter/Shooter.java b/src/main/java/frc/robot/subsystems/shooter/Shooter.java
+index a7821d0..db8f251 100644
+--- a/src/main/java/frc/robot/subsystems/shooter/Shooter.java
++++ b/src/main/java/frc/robot/subsystems/shooter/Shooter.java
+@@ -7,7 +7,7 @@ import edu.wpi.first.math.interpolation.InterpolatingDoubleTreeMap;
+ import edu.wpi.first.math.util.Units;
+ import edu.wpi.first.wpilibj.DriverStation;
+ import edu.wpi.first.wpilibj2.command.SubsystemBase;
+-import frc.robot.constants.DemoConstants;
++import frc.robot.constants.ShotConstants;
+ import frc.robot.constants.ShooterConstants;
+ import frc.robot.subsystems.shooter.ShooterIO.ShooterIOInputsAutoLogged;
+ 
+@@ -90,7 +90,7 @@ public class Shooter extends SubsystemBase {
+             return;
+         }
+         double deadbandRadPerSec =
+-                Units.rotationsToRadians(DemoConstants.flywheelSetpointDeadbandRPS);
++                Units.rotationsToRadians(ShotConstants.flywheelSetpointDeadbandRPS);
+         if (Math.abs(velocityRadPerSec - lastFlywheelRadPerSec) < deadbandRadPerSec) {
+             return;
+         }
+@@ -168,7 +168,7 @@ public class Shooter extends SubsystemBase {
+         if (!Double.isFinite(degrees)) {
+             return;
+         }
+-        if (Math.abs(degrees - lastHoodDeg) < DemoConstants.hoodSetpointDeadbandDeg) {
++        if (Math.abs(degrees - lastHoodDeg) < ShotConstants.hoodSetpointDeadbandDeg) {
+             return;
+         }
+         lastHoodDeg = degrees;
+diff --git a/src/main/java/frc/robot/subsystems/turret/TurretIOTalonFX.java b/src/main/java/frc/robot/subsystems/turret/TurretIOTalonFX.java
+index 2e6cc13..5032913 100644
+--- a/src/main/java/frc/robot/subsystems/turret/TurretIOTalonFX.java
++++ b/src/main/java/frc/robot/subsystems/turret/TurretIOTalonFX.java
+@@ -2,6 +2,7 @@ package frc.robot.subsystems.turret;
+ 
+ import static frc.robot.util.PhoenixUtil.*;
+ 
++import frc.robot.constants.CompetitionConstants;
+ import frc.robot.constants.DemoConstants;
+ import frc.robot.constants.RobotConstants;
+ import frc.robot.constants.TurretConstants;
+@@ -52,7 +53,11 @@ public class TurretIOTalonFX extends ShooterIOTalonFX implements TurretIO {
+                     .withKD(DemoConstants.turretDemoKd)
+                     .withKS(DemoConstants.turretDemoKs)
+                     .withKV(DemoConstants.turretDemoKv);
++        } else if (!RobotConstants.isDemoMode && CompetitionConstants.useV2TurretGains) {
++            // Competencia v2: mismas ganancias sin integral, un poco más de kP.
++            rotationConfig.Slot0 = CompetitionConstants.turretGains;
+         } else {
++            // Denver, tal cual.
+             rotationConfig.Slot0 = TurretConstants.rotationMotorGains;
+         }
+         rotationConfig.Feedback.SensorToMechanismRatio = TurretConstants.rotationMotorGearRatio;
+@@ -65,11 +70,14 @@ public class TurretIOTalonFX extends ShooterIOTalonFX implements TurretIO {
+         // Perfiles más lentos en demo: para seguir un objetivo suavemente
+         // conviene que el perfil no alcance a saturar entre comando y comando.
+         boolean demoProfile = RobotConstants.isDemoMode && DemoConstants.useDemoTurretGains;
++        boolean v2Profile = !RobotConstants.isDemoMode && CompetitionConstants.useV2TurretGains;
+         rotationConfig.MotionMagic.MotionMagicCruiseVelocity = demoProfile
+                 ? DemoConstants.turretDemoCruiseRotPerSec
++                : v2Profile ? CompetitionConstants.turretCruiseRotPerSec
+                 : TurretConstants.maxVelocityRotPerSec;
+         rotationConfig.MotionMagic.MotionMagicAcceleration = demoProfile
+                 ? DemoConstants.turretDemoAccelRotPerSecSec
++                : v2Profile ? CompetitionConstants.turretAccelRotPerSecSec
+                 : TurretConstants.maxAccelerationRotPerSecSec;
+         tryUntilOk(5, () -> rotationMotor.getConfigurator().apply(rotationConfig, 0.25));
+         tryUntilOk(5, () -> rotationMotor.setPosition(0.0, 0.25));
+diff --git a/src/main/java/frc/robot/subsystems/vision/Vision.java b/src/main/java/frc/robot/subsystems/vision/Vision.java
+index ad5dfd2..84c8a0a 100644
+--- a/src/main/java/frc/robot/subsystems/vision/Vision.java
++++ b/src/main/java/frc/robot/subsystems/vision/Vision.java
+@@ -19,7 +19,7 @@ import edu.wpi.first.wpilibj.Alert;
+ import edu.wpi.first.wpilibj.Alert.AlertType;
+ import edu.wpi.first.wpilibj.DriverStation;
+ import edu.wpi.first.wpilibj2.command.SubsystemBase;
+-import frc.robot.constants.DemoConstants;
++import frc.robot.constants.VisionConstants;
+ import frc.robot.subsystems.vision.VisionIO.PoseObservationType;
+ import frc.robot.subsystems.vision.VisionIO.VisionIOInputsAutoLogged;
+ 
+@@ -56,6 +56,13 @@ public class Vision extends SubsystemBase {
+   /** Gestión térmica automática de la Limelight 4. */
+   private boolean throttleManagement = false;
+ 
++  /**
++   * Modos de IMU de la Limelight 4 según el estado del robot. {@code null} =
++   * no se gestiona (LL2/2+, o nadie lo configuró).
++   */
++  private Integer imuModeDisabled = null;
++  private Integer imuModeEnabled = null;
++
+   /**
+    * Qué tags tienen permiso de corregir la odometría.
+    *
+@@ -214,6 +221,20 @@ public class Vision extends SubsystemBase {
+     this.throttleManagement = enabled;
+   }
+ 
++  /**
++   * Gestiona el modo de IMU de la Limelight 4 según el estado del robot.
++   *
++   * <p>
++   * Deshabilitado se siembra la IMU interna con el yaw del Pigeon (modo 1) y
++   * habilitado se usa la interna con el Pigeon como asistencia (modo 4). Pasar
++   * el mismo valor en los dos fija un modo único (el demo usa 0/0 porque su
++   * cámara gira con la torreta). El IO sólo escribe cuando el modo cambia.
++   */
++  public void setImuModes(int whenDisabled, int whenEnabled) {
++    this.imuModeDisabled = whenDisabled;
++    this.imuModeEnabled = whenEnabled;
++  }
++
+   /**
+    * Publica la transformada robot→cámara. Con la Limelight en la torreta hay
+    * que llamarlo cada ciclo con el ángulo actual del mecanismo.
+@@ -250,13 +271,22 @@ public class Vision extends SubsystemBase {
+     if (throttleManagement) {
+       int throttle =
+           DriverStation.isEnabled()
+-              ? DemoConstants.limelight4ThrottleEnabled
+-              : DemoConstants.limelight4ThrottleDisabled;
++              ? VisionConstants.limelight4ThrottleEnabled
++              : VisionConstants.limelight4ThrottleDisabled;
+       for (VisionIO camera : io) {
+         camera.setThrottle(throttle);
+       }
+     }
+ 
++    // Modo de IMU de la LL4. Se pide cada ciclo pero el IO sólo publica al
++    // cambiar, así que en la práctica son dos escrituras por partido.
++    if (imuModeDisabled != null && imuModeEnabled != null) {
++      int mode = DriverStation.isEnabled() ? imuModeEnabled : imuModeDisabled;
++      for (VisionIO camera : io) {
++        camera.setImuMode(mode);
++      }
++    }
++
+     for (int i = 0; i < io.length; i++) {
+       io[i].updateInputs(inputs[i]);
+       Logger.processInputs("Vision/Camera" + Integer.toString(i), inputs[i]);
+diff --git a/src/main/java/frc/robot/subsystems/vision/VisionIOLimelight.java b/src/main/java/frc/robot/subsystems/vision/VisionIOLimelight.java
+index 49fcdbb..d53ca12 100644
+--- a/src/main/java/frc/robot/subsystems/vision/VisionIOLimelight.java
++++ b/src/main/java/frc/robot/subsystems/vision/VisionIOLimelight.java
+@@ -18,7 +18,7 @@ import edu.wpi.first.networktables.DoublePublisher;
+ import edu.wpi.first.networktables.DoubleSubscriber;
+ import edu.wpi.first.networktables.NetworkTableInstance;
+ import edu.wpi.first.wpilibj.RobotController;
+-import frc.robot.constants.DemoConstants;
++import frc.robot.constants.VisionConstants;
+ import java.util.HashSet;
+ import java.util.LinkedList;
+ import java.util.List;
+@@ -53,6 +53,7 @@ public class VisionIOLimelight implements VisionIO {
+   private int lastPipeline = -1;
+   private int lastPriorityId = Integer.MIN_VALUE;
+   private int lastThrottle = Integer.MIN_VALUE;
++  private int lastImuMode = Integer.MIN_VALUE;
+ 
+   /**
+    * Creates a new VisionIOLimelight.
+@@ -90,16 +91,12 @@ public class VisionIOLimelight implements VisionIO {
+ 
+     // ── Limelight 4: modo de IMU ──────────────────────────────────────────
+     //
+-    // Sólo aplica a la LL4; en una LL2/2+ esta clave no existe y escribirla no
+-    // hace nada, pero deja basura en la tabla que confunde al depurar.
+-    //
+-    // Si algún día vuelven a la LL4: se fuerza a modo externo (0) porque la IMU
+-    // interna está atornillada a la cámara, y la cámara a la torreta. Cuando la
+-    // torreta gira 90°, la IMU cree que el ROBOT giró 90°, y MegaTag2 recibiría
+-    // un yaw que no corresponde al chasis.
+-    if (DemoConstants.isLimelight4) {
+-      imuModePublisher.accept(DemoConstants.limelight4ImuMode);
+-    }
++    // El modo de IMU NO se fija aquí: lo gestiona Vision.periodic() según el
++    // estado del robot (ver Vision.setImuModes). En competencia la cámara es
++    // fija y se usa la IMU interna de la LL4 con el Pigeon como asistencia; en
++    // demo la cámara va en la torreta y se fuerza a IMU externa (0), porque la
++    // interna giraría con el mecanismo y MegaTag2 recibiría un yaw que no es el
++    // del chasis. En una LL2/2+ la clave no existe y no se escribe nada.
+   }
+ 
+   @Override
+@@ -267,7 +264,7 @@ public class VisionIOLimelight implements VisionIO {
+    */
+   @Override
+   public void setRobotToCamera(Transform3d robotToCamera) {
+-    double sideSign = DemoConstants.limelightInvertSideAxis ? -1.0 : 1.0;
++    double sideSign = VisionConstants.limelightInvertSideAxis ? -1.0 : 1.0;
+     cameraPosePublisher.accept(
+         new double[] {
+           robotToCamera.getX(),
+@@ -290,17 +287,18 @@ public class VisionIOLimelight implements VisionIO {
+   /** Gestión térmica. Sólo existe en la Limelight 4. */
+   @Override
+   public void setThrottle(int throttle) {
+-    if (DemoConstants.isLimelight4 && throttle != lastThrottle) {
++    if (VisionConstants.isLimelight4 && throttle != lastThrottle) {
+       throttlePublisher.accept(throttle);
+       lastThrottle = throttle;
+     }
+   }
+ 
+-  /** Modo de IMU. Sólo existe en la Limelight 4. */
++  /** Modo de IMU. Sólo existe en la Limelight 4. Se publica sólo al cambiar. */
+   @Override
+   public void setImuMode(int mode) {
+-    if (DemoConstants.isLimelight4) {
++    if (VisionConstants.isLimelight4 && mode != lastImuMode) {
+       imuModePublisher.accept(mode);
++      lastImuMode = mode;
+     }
+   }
+ 
+diff --git a/src/main/java/frc/robot/util/CompetitionState.java b/src/main/java/frc/robot/util/CompetitionState.java
+new file mode 100644
+index 0000000..d1b3cf8
+--- /dev/null
++++ b/src/main/java/frc/robot/util/CompetitionState.java
+@@ -0,0 +1,136 @@
++package frc.robot.util;
++
++import org.littletonrobotics.junction.Logger;
++
++import edu.wpi.first.math.geometry.Pose2d;
++import edu.wpi.first.math.geometry.Translation2d;
++import edu.wpi.first.wpilibj.DriverStation;
++import edu.wpi.first.wpilibj.DriverStation.Alliance;
++import frc.robot.constants.CompetitionConstants;
++import frc.robot.constants.RobotConstants;
++import frc.robot.constants.RobotConstants.CompetitionTarget;
++import frc.robot.constants.RobotConstants.RobotMode;
++
++/**
++ * Estado global del robot de COMPETENCIA (v2).
++ *
++ * <p>
++ * Reemplaza a los tres enums estáticos de Denver ({@code Robot.mode},
++ * {@code Drive.mode}, {@code Turret.mode}), que se pisaban entre sí desde
++ * cuatro botones distintos y era imposible saber en qué combinación estaba el
++ * robot sin leer el log. Aquí hay exactamente dos preguntas:
++ *
++ * <pre>
++ *   ¿QUIÉN apunta?    STRIKER = la torreta   |  BOMBER = el chasis (torreta en cero)
++ *   ¿A QUÉ le apunta? HUB                    |  FEEDER (pase hacia la propia alianza)
++ * </pre>
++ *
++ * <p>
++ * Todo cambio se loguea, así que en AdvantageScope se ve exactamente en qué
++ * modo estaba el robot en cada frame.
++ *
++ * <h2>Estado al dar enable</h2>
++ *
++ * STRIKER apuntando al HUB. Es la configuración de siempre: torreta rastreando
++ * el HUB por odometría y el piloto con el chasis 100% manual.
++ */
++public final class CompetitionState {
++
++    private static RobotMode mode = RobotMode.STRIKER;
++    private static CompetitionTarget target = CompetitionTarget.HUB;
++
++    private CompetitionState() {
++    }
++
++    // ── Getters ─────────────────────────────────────────────────────────────
++
++    public static RobotMode getMode() {
++        return mode;
++    }
++
++    public static CompetitionTarget getTarget() {
++        return target;
++    }
++
++    public static boolean isStriker() {
++        return mode == RobotMode.STRIKER;
++    }
++
++    public static boolean isBomber() {
++        return mode == RobotMode.BOMBER;
++    }
++
++    public static boolean isHubTarget() {
++        return target == CompetitionTarget.HUB;
++    }
++
++    // ── Transiciones ────────────────────────────────────────────────────────
++
++    /** Alterna STRIKER ↔ BOMBER. Botón Y del operador. */
++    public static void toggleMode() {
++        mode = isStriker() ? RobotMode.BOMBER : RobotMode.STRIKER;
++        log();
++    }
++
++    /** Alterna HUB ↔ FEEDER. Botón Back del operador. */
++    public static void toggleTarget() {
++        target = isHubTarget() ? CompetitionTarget.FEEDER : CompetitionTarget.HUB;
++        log();
++    }
++
++    public static void setMode(RobotMode newMode) {
++        mode = newMode;
++        log();
++    }
++
++    public static void setTarget(CompetitionTarget newTarget) {
++        target = newTarget;
++        log();
++    }
++
++    /** Vuelve al estado por defecto. Se llama en teleopInit. */
++    public static void reset() {
++        mode = RobotMode.STRIKER;
++        target = CompetitionTarget.HUB;
++        log();
++    }
++
++    // ── Objetivos ───────────────────────────────────────────────────────────
++
++    public static boolean isRedAlliance() {
++        return DriverStation.getAlliance().isPresent()
++                && DriverStation.getAlliance().get() == Alliance.Red;
++    }
++
++    /** HUB de la alianza que reporte la Driver Station. */
++    public static Translation2d getHubPosition() {
++        return isRedAlliance() ? RobotConstants.redHub : RobotConstants.blueHub;
++    }
++
++    /**
++     * Punto de pase para FEEDER: sobre la línea de la alianza, a la misma Y del
++     * robot. El robot "tira hacia su pared" y la pelota cae en la zona propia.
++     */
++    public static Translation2d getFeederPosition(Pose2d robotPose) {
++        double x = isRedAlliance()
++                ? CompetitionConstants.feederTargetXRed
++                : CompetitionConstants.feederTargetXBlue;
++        return new Translation2d(x, robotPose.getY());
++    }
++
++    /**
++     * Objetivo activo del apuntado según {@link #getTarget()}.
++     *
++     * <p>
++     * Torreta, cañón fijo y rumbo del chasis llaman aquí con la misma pose, así
++     * que apuntan siempre al mismo punto.
++     */
++    public static Translation2d getActiveTarget(Pose2d robotPose) {
++        return isHubTarget() ? getHubPosition() : getFeederPosition(robotPose);
++    }
++
++    public static void log() {
++        Logger.recordOutput("Match/Mode", mode);
++        Logger.recordOutput("Match/Target", target);
++    }
++}
+diff --git a/src/main/java/frc/robot/util/FieldTracking.java b/src/main/java/frc/robot/util/FieldTracking.java
+index 9b3aee9..bdd6b53 100644
+--- a/src/main/java/frc/robot/util/FieldTracking.java
++++ b/src/main/java/frc/robot/util/FieldTracking.java
+@@ -1,5 +1,6 @@
+ package frc.robot.util;
+ 
++import frc.robot.constants.ShotConstants;
+ import edu.wpi.first.math.geometry.Translation2d;
+ import edu.wpi.first.wpilibj.DriverStation;
+ import edu.wpi.first.wpilibj.DriverStation.Alliance;
+@@ -75,7 +76,7 @@ public class FieldTracking {
+      * comportamiento que queremos evitar.
+      */
+     public static boolean isOdometryValid() {
+-        return secondsSinceUpdate() < DemoConstants.odometryTrustSeconds;
++        return secondsSinceUpdate() < ShotConstants.odometryTrustSeconds;
+     }
+ 
+     public static void reset() {
+diff --git a/src/main/java/frc/robot/util/HeadingController.java b/src/main/java/frc/robot/util/HeadingController.java
+new file mode 100644
+index 0000000..c823fa7
+--- /dev/null
++++ b/src/main/java/frc/robot/util/HeadingController.java
+@@ -0,0 +1,102 @@
++package frc.robot.util;
++
++import edu.wpi.first.math.MathUtil;
++import edu.wpi.first.wpilibj.Timer;
++
++/**
++ * Controlador de rumbo suave para el chasis (PD con compuerta suave).
++ *
++ * <p>
++ * Es el controlador que se probó en el demo, extraído a una clase reutilizable
++ * con sus ganancias por constructor. Tres cosas lo hacen suave, y las tres
++ * faltaban en el {@code DriveCommands.joystickDrive} de Denver:
++ *
++ * <ol>
++ * <li><b>La salida ya está en rad/s y no se re-escala.</b> Denver multiplicaba
++ * la salida del {@code ProfiledPIDController} por
++ * {@code getMaxAngularSpeedRadPerSec()} (~20 rad/s), lo que saturaba al
++ * instante y convertía el lazo en bang-bang. Ése es el origen del "orbit muy
++ * violento".</li>
++ *
++ * <li><b>Compuerta suave en vez de corte.</b> Apagar la salida de golpe con
++ * {@code atSetpoint()} es una discontinuidad: corrige, se pasa, vuelve a
++ * corregir. Aquí la salida se escala de 0 a 1 a lo largo de una rampa.</li>
++ *
++ * <li><b>Derivativo sobre el error filtrado.</b> Un término D crudo amplifica
++ * el ruido de la medición; filtrarlo primero es lo que permite subirlo lo
++ * suficiente para amortiguar de verdad.</li>
++ * </ol>
++ */
++public class HeadingController {
++
++    private final double kp;
++    private final double kd;
++    private final double derivativeAlpha;
++    private final double toleranceRad;
++    private final double softZoneRad;
++    private final double maxOmegaRadPerSec;
++
++    private double lastError = 0.0;
++    private double filteredDerivative = 0.0;
++    private double lastTimestamp = -1.0;
++    private boolean initialized = false;
++
++    /**
++     * @param kp                Ganancia proporcional, rad/s por radián.
++     * @param kd                Ganancia derivativa sobre el error filtrado.
++     * @param derivativeAlpha   Filtro del derivativo (0-1, menor = más filtro).
++     * @param toleranceRad      Debajo de esto no se comanda nada.
++     * @param softZoneRad       Ancho de la rampa suave arriba de la tolerancia.
++     * @param maxOmegaRadPerSec Tope de la salida.
++     */
++    public HeadingController(
++            double kp,
++            double kd,
++            double derivativeAlpha,
++            double toleranceRad,
++            double softZoneRad,
++            double maxOmegaRadPerSec) {
++        this.kp = kp;
++        this.kd = kd;
++        this.derivativeAlpha = derivativeAlpha;
++        this.toleranceRad = toleranceRad;
++        this.softZoneRad = softZoneRad;
++        this.maxOmegaRadPerSec = maxOmegaRadPerSec;
++    }
++
++    /**
++     * @param errorRad Error de rumbo (objetivo − actual), en radianes CCW.
++     * @return Velocidad angular a comandar, en rad/s.
++     */
++    public double calculate(double errorRad) {
++        double now = Timer.getFPGATimestamp();
++        double dt = (lastTimestamp < 0.0) ? 0.02 : now - lastTimestamp;
++        lastTimestamp = now;
++        dt = MathUtil.clamp(dt, 0.001, 0.1);
++
++        // El error viene envuelto a ±π; envolver también la diferencia evita un
++        // pico de ~2π/dt en el derivativo al cruzar la costura.
++        double derivative = initialized ? MathUtil.angleModulus(errorRad - lastError) / dt : 0.0;
++        initialized = true;
++        lastError = errorRad;
++
++        filteredDerivative += derivativeAlpha * (derivative - filteredDerivative);
++
++        double output = kp * errorRad + kd * filteredDerivative;
++
++        // Compuerta suave alrededor del setpoint.
++        double gate = MathUtil.clamp(
++                (Math.abs(errorRad) - toleranceRad) / Math.max(softZoneRad, 1.0e-6),
++                0.0, 1.0);
++        output *= gate;
++
++        return MathUtil.clamp(output, -maxOmegaRadPerSec, maxOmegaRadPerSec);
++    }
++
++    public void reset() {
++        lastError = 0.0;
++        filteredDerivative = 0.0;
++        lastTimestamp = -1.0;
++        initialized = false;
++    }
++}
+diff --git a/src/main/java/frc/robot/util/MatchDashboard.java b/src/main/java/frc/robot/util/MatchDashboard.java
+new file mode 100644
+index 0000000..4c875d8
+--- /dev/null
++++ b/src/main/java/frc/robot/util/MatchDashboard.java
+@@ -0,0 +1,169 @@
++package frc.robot.util;
++
++import edu.wpi.first.wpilibj.smartdashboard.SmartDashboard;
++import frc.robot.subsystems.shooter.Shooter;
++import frc.robot.subsystems.turret.Turret;
++import frc.robot.subsystems.vision.Vision;
++
++/**
++ * Publicación de estado a Elastic durante un partido.
++ *
++ * <p>
++ * Todo sale bajo {@code /SmartDashboard/Match/...}. La pestaña "Competencia"
++ * del layout {@code src/main/deploy/elastic-layout.json} la consume.
++ *
++ * <p>
++ * Diseño: en un partido el operador tiene medio segundo para mirar la
++ * pantalla. Necesita saber <b>en qué modo estoy</b>, <b>a qué le apunto</b> y
++ * <b>puedo tirar ya</b>. Todo lo demás es para el pit y va abajo.
++ */
++public final class MatchDashboard {
++
++    private static final int CAM = 0;
++
++    // ── Escrito por los comandos cada ciclo ─────────────────────────────────
++
++    /** Estado legible de la torreta: INACTIVA / HUB por odometría / CERO ... */
++    public static String turretState = "INACTIVA";
++
++    public static boolean aiming = false;
++    public static boolean charging = false;
++    public static boolean turretOnTarget = false;
++    public static boolean headingAssisted = false;
++    public static boolean precisionActive = false;
++
++    public static double distanceMeters = 0.0;
++    public static double turretErrorDeg = 0.0;
++    public static double shotAimOffsetDeg = 0.0;
++    public static double shotCompensationMeters = 0.0;
++    public static double fieldSpeedMetersPerSec = 0.0;
++    public static double headingErrorDeg = 0.0;
++
++    /** Fuente del rumbo asistido en BOMBER: ODOMETRIA / MANUAL / — */
++    public static String alignSource = "—";
++
++    // ── Referencias a subsistemas ───────────────────────────────────────────
++
++    private static Vision vision = null;
++    private static Shooter shooter = null;
++    private static Turret turret = null;
++
++    private MatchDashboard() {
++    }
++
++    public static void configure(Vision visionRef, Shooter shooterRef, Turret turretRef) {
++        vision = visionRef;
++        shooter = shooterRef;
++        turret = turretRef;
++    }
++
++    /** Devuelve todo al estado seguro. Se llama al deshabilitar. */
++    public static void reset() {
++        turretState = "INACTIVA";
++        aiming = false;
++        charging = false;
++        turretOnTarget = false;
++        headingAssisted = false;
++        precisionActive = false;
++        distanceMeters = 0.0;
++        turretErrorDeg = 0.0;
++        shotAimOffsetDeg = 0.0;
++        shotCompensationMeters = 0.0;
++        fieldSpeedMetersPerSec = 0.0;
++        headingErrorDeg = 0.0;
++        alignSource = "—";
++    }
++
++    /** ¿Están a velocidad los flywheels que van a disparar en este modo? */
++    public static boolean flywheelsReady() {
++        if (turret == null || shooter == null) {
++            return false;
++        }
++        // En BOMBER disparan los dos cañones; en STRIKER sólo la torreta.
++        return CompetitionState.isBomber()
++                ? turret.isFlywheelAtSpeed() && shooter.isFlywheelAtSpeed()
++                : turret.isFlywheelAtSpeed();
++    }
++
++    /** Tolerancia de rumbo del chasis para declarar "alineado" en BOMBER. */
++    private static final double HEADING_READY_DEG = 3.0;
++
++    /**
++     * Apuntada + acelerada + cargando. Verde = alimentar mete el tiro.
++     *
++     * <p>
++     * En BOMBER quien apunta es el chasis, así que además de la torreta en cero
++     * se exige que la asistencia esté activa y el error de rumbo sea chico.
++     */
++    public static boolean readyToShoot() {
++        boolean aimed = CompetitionState.isBomber()
++                ? turretOnTarget && headingAssisted && Math.abs(headingErrorDeg) < HEADING_READY_DEG
++                : turretOnTarget;
++        return charging && flywheelsReady() && aimed;
++    }
++
++    /** Se llama desde {@code Robot.robotPeriodic()}. */
++    public static void publish() {
++        // ── Estado principal ────────────────────────────────────────────────
++        SmartDashboard.putString("Match/Modo", CompetitionState.getMode().toString());
++        SmartDashboard.putString("Match/Objetivo", CompetitionState.getTarget().toString());
++        SmartDashboard.putString("Match/Torreta", turretState);
++
++        // ── Los indicadores grandes ─────────────────────────────────────────
++        SmartDashboard.putBoolean("Match/LISTO PARA TIRAR", readyToShoot());
++        SmartDashboard.putBoolean("Match/Torreta apuntada", turretOnTarget);
++        SmartDashboard.putBoolean("Match/Flywheels listos", flywheelsReady());
++        SmartDashboard.putBoolean("Match/Odometria fresca", FieldTracking.isOdometryValid());
++
++        // ── Detalle ─────────────────────────────────────────────────────────
++        SmartDashboard.putBoolean("Match/Apuntando", aiming);
++        SmartDashboard.putBoolean("Match/Cargando", charging);
++        SmartDashboard.putBoolean("Match/Chasis asistido", headingAssisted);
++        SmartDashboard.putBoolean("Match/Modo precision", precisionActive);
++        SmartDashboard.putString("Match/Fuente rumbo", alignSource);
++
++        SmartDashboard.putNumber("Match/Distancia m", round(distanceMeters, 2));
++        SmartDashboard.putNumber("Match/Error torreta deg", round(turretErrorDeg, 1));
++        SmartDashboard.putNumber("Match/Error rumbo deg", round(headingErrorDeg, 1));
++        SmartDashboard.putNumber("Match/Compensacion mov deg", round(shotAimOffsetDeg, 1));
++        SmartDashboard.putNumber("Match/Compensacion mov m", round(shotCompensationMeters, 2));
++        SmartDashboard.putNumber("Match/Velocidad campo mps", round(fieldSpeedMetersPerSec, 2));
++        SmartDashboard.putNumber(
++                "Match/Sin ver tag s", round(Math.min(FieldTracking.secondsSinceUpdate(), 99.0), 1));
++
++        // ── Salud de la Limelight ───────────────────────────────────────────
++        if (vision != null) {
++            SmartDashboard.putBoolean("Match/Limelight OK", vision.isConnected(CAM));
++            SmartDashboard.putBoolean("Match/Tag a la vista", vision.hasTarget(CAM));
++            SmartDashboard.putNumber("Match/Tag ID", vision.getPrimaryTagId(CAM));
++            SmartDashboard.putNumber(
++                    "Match/Latencia ms", round(vision.getLatencySeconds(CAM) * 1000.0, 1));
++        }
++
++        SmartDashboard.putString("Match/Estado", statusLine());
++    }
++
++    /** Una línea que resume todo, para el widget de texto grande. */
++    private static String statusLine() {
++        StringBuilder sb = new StringBuilder();
++        sb.append(CompetitionState.getMode())
++                .append(" → ")
++                .append(CompetitionState.getTarget())
++                .append(" · ")
++                .append(turretState);
++        if (charging) {
++            sb.append(readyToShoot() ? " · LISTO" : " · cargando...");
++        } else if (aiming) {
++            sb.append(" · apuntando");
++        }
++        if (!FieldTracking.isOdometryValid()) {
++            sb.append(" · ODOMETRIA VIEJA");
++        }
++        return sb.toString();
++    }
++
++    private static double round(double value, int decimals) {
++        double scale = Math.pow(10, decimals);
++        return Math.round(value * scale) / scale;
++    }
++}
+diff --git a/src/main/java/frc/robot/util/ShotSolution.java b/src/main/java/frc/robot/util/ShotSolution.java
+index d8066cc..c6ddae2 100644
+--- a/src/main/java/frc/robot/util/ShotSolution.java
++++ b/src/main/java/frc/robot/util/ShotSolution.java
+@@ -6,7 +6,7 @@ import edu.wpi.first.math.MathUtil;
+ import edu.wpi.first.math.geometry.Pose2d;
+ import edu.wpi.first.math.geometry.Rotation2d;
+ import edu.wpi.first.math.geometry.Translation2d;
+-import frc.robot.constants.DemoConstants;
++import frc.robot.constants.ShotConstants;
+ 
+ /**
+  * Solución de tiro: a dónde apuntar y a qué distancia.
+@@ -128,7 +128,7 @@ public class ShotSolution {
+ 
+         Translation2d robot = robotPose.getTranslation();
+         double staticDistance = robot.getDistance(target);
+-        double staticTof = DemoConstants.kTimeOfFlightMap.get(clampDistance(staticDistance));
++        double staticTof = ShotConstants.kTimeOfFlightMap.get(clampDistance(staticDistance));
+ 
+         // Sin compensación: apuntar directo al objetivo.
+         //
+@@ -137,12 +137,12 @@ public class ShotSolution {
+         // la pose o desde los módulos, y la distancia mínima evita calcular un
+         // rumbo encima del objetivo, donde unos centímetros son decenas de
+         // grados.
+-        if (!DemoConstants.shootWhileMovingEnabled
++        if (!ShotConstants.shootWhileMovingEnabled
+                 || fieldVelocity == null
+                 || !Double.isFinite(fieldVelocity.getNorm())
+-                || fieldVelocity.getNorm() < DemoConstants.shootWhileMovingMinSpeed
++                || fieldVelocity.getNorm() < ShotConstants.shootWhileMovingMinSpeed
+                 || !Double.isFinite(staticDistance)
+-                || staticDistance < DemoConstants.minShotDistanceMeters) {
++                || staticDistance < ShotConstants.minShotDistanceMeters) {
+             return new ShotSolution(
+                     target, clampDistance(staticDistance), staticTof, 0.0, 0.0);
+         }
+@@ -150,22 +150,22 @@ public class ShotSolution {
+         // Objetivo virtual, con un par de iteraciones para converger.
+         Translation2d aim = target;
+         double tof = staticTof;
+-        for (int i = 0; i < DemoConstants.shootWhileMovingIterations; i++) {
+-            tof = DemoConstants.kTimeOfFlightMap.get(clampDistance(robot.getDistance(aim)));
+-            Translation2d offset = fieldVelocity.times(-tof * DemoConstants.shootWhileMovingGain);
++        for (int i = 0; i < ShotConstants.shootWhileMovingIterations; i++) {
++            tof = ShotConstants.kTimeOfFlightMap.get(clampDistance(robot.getDistance(aim)));
++            Translation2d offset = fieldVelocity.times(-tof * ShotConstants.shootWhileMovingGain);
+ 
+             // Tope de seguridad: si la velocidad estimada viene basura, la
+             // corrección se dispara y la torreta se va a un punto absurdo.
+-            if (offset.getNorm() > DemoConstants.shootWhileMovingMaxCompensationMeters) {
++            if (offset.getNorm() > ShotConstants.shootWhileMovingMaxCompensationMeters) {
+                 offset = offset.times(
+-                        DemoConstants.shootWhileMovingMaxCompensationMeters / offset.getNorm());
++                        ShotConstants.shootWhileMovingMaxCompensationMeters / offset.getNorm());
+             }
+             aim = target.plus(offset);
+         }
+ 
+         // El tiempo de vuelo que se reporta tiene que ser el del punto de mira
+         // que devolvemos, no el de la iteración anterior.
+-        tof = DemoConstants.kTimeOfFlightMap.get(clampDistance(robot.getDistance(aim)));
++        tof = ShotConstants.kTimeOfFlightMap.get(clampDistance(robot.getDistance(aim)));
+ 
+         // ── Corrección angular ──────────────────────────────────────────────
+         // Es la diferencia de rumbos vista DESDE EL ROBOT, no la orientación
+@@ -177,7 +177,7 @@ public class ShotSolution {
+         // El objetivo virtual puede caer encima del robot aunque el real esté
+         // lejos: la corrección llega a 2.5 m. Sin esta guarda, atan2(0,0) da un
+         // rumbo inventado que cambia de signo con el ruido.
+-        if (toAim.getNorm() < DemoConstants.minShotDistanceMeters) {
++        if (toAim.getNorm() < ShotConstants.minShotDistanceMeters) {
+             return new ShotSolution(
+                     target, clampDistance(staticDistance), staticTof, 0.0, 0.0);
+         }
+@@ -190,9 +190,9 @@ public class ShotSolution {
+         // alcanza como red de seguridad: 2.5 m son 15° a 9 m pero más de 60° a
+         // 2 m.
+         double offsetRad = MathUtil.clamp(
+-                rawOffsetRad * DemoConstants.shootWhileMovingAimSign,
+-                -DemoConstants.shootWhileMovingMaxAimOffsetRad,
+-                DemoConstants.shootWhileMovingMaxAimOffsetRad);
++                rawOffsetRad * ShotConstants.shootWhileMovingAimSign,
++                -ShotConstants.shootWhileMovingMaxAimOffsetRad,
++                ShotConstants.shootWhileMovingMaxAimOffsetRad);
+ 
+         if (!Double.isFinite(offsetRad)) {
+             offsetRad = 0.0;
+@@ -231,19 +231,19 @@ public class ShotSolution {
+      */
+     private static double clampDistance(double distance) {
+         if (!Double.isFinite(distance)) {
+-            return DemoConstants.fallbackDistanceMeters;
++            return ShotConstants.fallbackDistanceMeters;
+         }
+         return MathUtil.clamp(
+-                distance, DemoConstants.minShotDistanceMeters, DemoConstants.maxShotDistanceMeters);
++                distance, ShotConstants.minShotDistanceMeters, ShotConstants.maxShotDistanceMeters);
+     }
+ 
+     /** Publica la solución al log. Se llama una sola vez por ciclo. */
+     public void log() {
+-        Logger.recordOutput("Demo/Shot/AimPoint", aimPoint);
+-        Logger.recordOutput("Demo/Shot/DistanceMeters", distanceMeters);
+-        Logger.recordOutput("Demo/Shot/TimeOfFlightSec", timeOfFlightSeconds);
+-        Logger.recordOutput("Demo/Shot/CompensationMeters", compensationMeters);
+-        Logger.recordOutput("Demo/Shot/AimOffsetDeg", Math.toDegrees(aimOffsetRad));
++        Logger.recordOutput("Shot/AimPoint", aimPoint);
++        Logger.recordOutput("Shot/DistanceMeters", distanceMeters);
++        Logger.recordOutput("Shot/TimeOfFlightSec", timeOfFlightSeconds);
++        Logger.recordOutput("Shot/CompensationMeters", compensationMeters);
++        Logger.recordOutput("Shot/AimOffsetDeg", Math.toDegrees(aimOffsetRad));
+         // El dashboard NO se escribe aquí. Lo llena quien apunta, con el valor
+         // que de verdad aplicó — que no siempre es éste, porque en caza libre la
+         // compensación se calcula contra el HUB y no se usa. Escribirlo en los
+diff --git a/src/main/java/frc/robot/util/TurretAimTracker.java b/src/main/java/frc/robot/util/TurretAimTracker.java
+new file mode 100644
+index 0000000..1427359
+--- /dev/null
++++ b/src/main/java/frc/robot/util/TurretAimTracker.java
+@@ -0,0 +1,89 @@
++package frc.robot.util;
++
++import edu.wpi.first.math.MathUtil;
++import edu.wpi.first.wpilibj.Timer;
++import frc.robot.constants.CompetitionConstants;
++import frc.robot.subsystems.turret.Turret;
++
++/**
++ * Generador de setpoints suaves para la torreta en competencia.
++ *
++ * <p>
++ * Es la parte del rastreador del demo que sigue aplicando cuando la cámara ya
++ * no está en la torreta: el ángulo viene de la <b>odometría</b> (una función
++ * suave del tiempo) y lo único que hace falta es que no se convierta en
++ * latigazos ni en temblor:
++ *
++ * <ul>
++ * <li><b>Filtro</b> — lima el escalón de una corrección de visión.</li>
++ * <li><b>Slew</b> — el setpoint no puede moverse más rápido que
++ * {@code turretMaxSetpointRateRadPerSec}. Una pose basura de un ciclo no manda
++ * la torreta a dar la vuelta.</li>
++ * <li><b>Deadband de comando</b> — el motor sólo se re-comanda si el setpoint
++ * cambió más de {@code turretSetpointDeadbandRad}. Cada comando nuevo reinicia
++ * el perfil de Motion Magic; re-comandar milésimas de grado a 50 Hz es
++ * exactamente lo que hacía temblar la torreta en Denver.</li>
++ * <li><b>Clamp</b> — siempre dentro de los soft limits.</li>
++ * </ul>
++ *
++ * <p>
++ * No hay histéresis de enganche: existía para no perseguir el ruido de píxel de
++ * {@code tx}, y aquí no hay {@code tx}.
++ */
++public class TurretAimTracker {
++
++    private double setpointRad = 0.0;
++    private double lastCommandedRad = Double.NaN;
++    private boolean initialized = false;
++    private double lastTimestamp = -1.0;
++
++    /** Arranca desde el ángulo actual para que el primer comando no sea un salto. */
++    public void reset(double currentAngleRad) {
++        setpointRad = Turret.clampToLimits(currentAngleRad);
++        lastCommandedRad = Double.NaN;
++        initialized = false;
++        lastTimestamp = -1.0;
++    }
++
++    private double stepSeconds() {
++        double now = Timer.getFPGATimestamp();
++        double dt = (lastTimestamp < 0.0) ? 0.02 : now - lastTimestamp;
++        lastTimestamp = now;
++        return MathUtil.clamp(dt, 0.001, 0.1);
++    }
++
++    /** Mueve el setpoint hacia el ángulo objetivo con filtro y slew. */
++    public void track(double targetAngleRad) {
++        if (!Double.isFinite(targetAngleRad)) {
++            return;
++        }
++        double dt = stepSeconds();
++        double previous = setpointRad;
++        double filtered = initialized
++                ? previous + CompetitionConstants.turretSetpointFilterAlpha * (targetAngleRad - previous)
++                : targetAngleRad;
++        initialized = true;
++
++        double maxStep = CompetitionConstants.turretMaxSetpointRateRadPerSec * dt;
++        setpointRad = Turret.clampToLimits(
++                MathUtil.clamp(filtered, previous - maxStep, previous + maxStep));
++    }
++
++    /** Mantiene el setpoint donde está (p. ej. muy cerca del objetivo). */
++    public void hold() {
++        stepSeconds();
++    }
++
++    /** Comanda la torreta sólo si el setpoint cambió lo suficiente. */
++    public void apply(Turret turret) {
++        if (Double.isNaN(lastCommandedRad)
++                || Math.abs(setpointRad - lastCommandedRad) > CompetitionConstants.turretSetpointDeadbandRad) {
++            turret.rotateToAngle(setpointRad);
++            lastCommandedRad = setpointRad;
++        }
++    }
++
++    public double setpoint() {
++        return setpointRad;
++    }
++}

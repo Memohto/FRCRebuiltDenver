@@ -1,5 +1,6 @@
 package frc.robot.util;
 
+import frc.robot.constants.ShotConstants;
 import edu.wpi.first.math.geometry.Translation2d;
 import edu.wpi.first.wpilibj.DriverStation;
 import edu.wpi.first.wpilibj.DriverStation.Alliance;
@@ -75,7 +76,7 @@ public class FieldTracking {
      * comportamiento que queremos evitar.
      */
     public static boolean isOdometryValid() {
-        return secondsSinceUpdate() < DemoConstants.odometryTrustSeconds;
+        return secondsSinceUpdate() < ShotConstants.odometryTrustSeconds;
     }
 
     public static void reset() {

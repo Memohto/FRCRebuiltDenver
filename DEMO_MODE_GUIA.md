@@ -479,7 +479,7 @@ todavía no está medido.
    `Demo/Compensacion mov deg`: parado debe ser **0 exacto**, y al moverte debe
    crecer proporcional a tu velocidad y hacia el lado al que te mueves.
 
-   En el log hay dos claves y la diferencia importa: `Demo/Shot/AimOffsetDeg` es
+   En el log hay dos claves y la diferencia importa: `Shot/AimOffsetDeg` es
    lo que la matemática **calculó**, y `Demo/Turret/AimOffsetDeg` es lo que la
    torreta **aplicó**. En modo HUB deben ser idénticas; si no lo son, algo está
    gateando la corrección. En caza libre la aplicada es 0 a propósito, porque el

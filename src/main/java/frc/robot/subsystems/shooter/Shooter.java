@@ -7,7 +7,7 @@ import edu.wpi.first.math.interpolation.InterpolatingDoubleTreeMap;
 import edu.wpi.first.math.util.Units;
 import edu.wpi.first.wpilibj.DriverStation;
 import edu.wpi.first.wpilibj2.command.SubsystemBase;
-import frc.robot.constants.DemoConstants;
+import frc.robot.constants.ShotConstants;
 import frc.robot.constants.ShooterConstants;
 import frc.robot.subsystems.shooter.ShooterIO.ShooterIOInputsAutoLogged;
 
@@ -90,7 +90,7 @@ public class Shooter extends SubsystemBase {
             return;
         }
         double deadbandRadPerSec =
-                Units.rotationsToRadians(DemoConstants.flywheelSetpointDeadbandRPS);
+                Units.rotationsToRadians(ShotConstants.flywheelSetpointDeadbandRPS);
         if (Math.abs(velocityRadPerSec - lastFlywheelRadPerSec) < deadbandRadPerSec) {
             return;
         }
@@ -168,7 +168,7 @@ public class Shooter extends SubsystemBase {
         if (!Double.isFinite(degrees)) {
             return;
         }
-        if (Math.abs(degrees - lastHoodDeg) < DemoConstants.hoodSetpointDeadbandDeg) {
+        if (Math.abs(degrees - lastHoodDeg) < ShotConstants.hoodSetpointDeadbandDeg) {
             return;
         }
         lastHoodDeg = degrees;

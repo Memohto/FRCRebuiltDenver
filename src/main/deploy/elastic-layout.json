@@ -3,6 +3,405 @@
   "grid_size": 128,
   "tabs": [
     {
+      "name": "Competencia",
+      "grid_layout": {
+        "layouts": [],
+        "containers": [
+          {
+            "title": "Estado",
+            "x": 0.0,
+            "y": 0.0,
+            "width": 768.0,
+            "height": 128.0,
+            "type": "Large Text Display",
+            "properties": {
+              "topic": "/SmartDashboard/Match/Estado",
+              "period": 0.06
+            }
+          },
+          {
+            "title": "LISTO PARA TIRAR",
+            "x": 768.0,
+            "y": 0.0,
+            "width": 384.0,
+            "height": 256.0,
+            "type": "Boolean Box",
+            "properties": {
+              "topic": "/SmartDashboard/Match/LISTO PARA TIRAR",
+              "period": 0.06,
+              "true_color": 4283215696,
+              "false_color": 4287137928
+            }
+          },
+          {
+            "title": "Modo",
+            "x": 0.0,
+            "y": 128.0,
+            "width": 256.0,
+            "height": 128.0,
+            "type": "Large Text Display",
+            "properties": {
+              "topic": "/SmartDashboard/Match/Modo",
+              "period": 0.06
+            }
+          },
+          {
+            "title": "Objetivo",
+            "x": 256.0,
+            "y": 128.0,
+            "width": 256.0,
+            "height": 128.0,
+            "type": "Large Text Display",
+            "properties": {
+              "topic": "/SmartDashboard/Match/Objetivo",
+              "period": 0.06
+            }
+          },
+          {
+            "title": "Torreta",
+            "x": 512.0,
+            "y": 128.0,
+            "width": 256.0,
+            "height": 128.0,
+            "type": "Large Text Display",
+            "properties": {
+              "topic": "/SmartDashboard/Match/Torreta",
+              "period": 0.06
+            }
+          },
+          {
+            "title": "Torreta apuntada",
+            "x": 0.0,
+            "y": 256.0,
+            "width": 256.0,
+            "height": 128.0,
+            "type": "Boolean Box",
+            "properties": {
+              "topic": "/SmartDashboard/Match/Torreta apuntada",
+              "period": 0.06,
+              "true_color": 4283215696,
+              "false_color": 4287137928
+            }
+          },
+          {
+            "title": "Flywheels listos",
+            "x": 256.0,
+            "y": 256.0,
+            "width": 256.0,
+            "height": 128.0,
+            "type": "Boolean Box",
+            "properties": {
+              "topic": "/SmartDashboard/Match/Flywheels listos",
+              "period": 0.06,
+              "true_color": 4283215696,
+              "false_color": 4287137928
+            }
+          },
+          {
+            "title": "Odometria fresca",
+            "x": 512.0,
+            "y": 256.0,
+            "width": 256.0,
+            "height": 128.0,
+            "type": "Boolean Box",
+            "properties": {
+              "topic": "/SmartDashboard/Match/Odometria fresca",
+              "period": 0.06,
+              "true_color": 4283215696,
+              "false_color": 4287137928
+            }
+          },
+          {
+            "title": "Limelight OK",
+            "x": 768.0,
+            "y": 256.0,
+            "width": 192.0,
+            "height": 128.0,
+            "type": "Boolean Box",
+            "properties": {
+              "topic": "/SmartDashboard/Match/Limelight OK",
+              "period": 0.06,
+              "true_color": 4283215696,
+              "false_color": 4287137928
+            }
+          },
+          {
+            "title": "Tag a la vista",
+            "x": 960.0,
+            "y": 256.0,
+            "width": 192.0,
+            "height": 128.0,
+            "type": "Boolean Box",
+            "properties": {
+              "topic": "/SmartDashboard/Match/Tag a la vista",
+              "period": 0.06,
+              "true_color": 4283215696,
+              "false_color": 4287137928
+            }
+          },
+          {
+            "title": "Distancia m",
+            "x": 0.0,
+            "y": 384.0,
+            "width": 192.0,
+            "height": 128.0,
+            "type": "Text Display",
+            "properties": {
+              "topic": "/SmartDashboard/Match/Distancia m",
+              "period": 0.06
+            }
+          },
+          {
+            "title": "Error torreta deg",
+            "x": 192.0,
+            "y": 384.0,
+            "width": 192.0,
+            "height": 128.0,
+            "type": "Text Display",
+            "properties": {
+              "topic": "/SmartDashboard/Match/Error torreta deg",
+              "period": 0.06
+            }
+          },
+          {
+            "title": "Error rumbo deg",
+            "x": 384.0,
+            "y": 384.0,
+            "width": 192.0,
+            "height": 128.0,
+            "type": "Text Display",
+            "properties": {
+              "topic": "/SmartDashboard/Match/Error rumbo deg",
+              "period": 0.06
+            }
+          },
+          {
+            "title": "Chasis asistido",
+            "x": 576.0,
+            "y": 384.0,
+            "width": 192.0,
+            "height": 128.0,
+            "type": "Boolean Box",
+            "properties": {
+              "topic": "/SmartDashboard/Match/Chasis asistido",
+              "period": 0.06,
+              "true_color": 4283215696,
+              "false_color": 4287137928
+            }
+          },
+          {
+            "title": "Modo precision",
+            "x": 768.0,
+            "y": 384.0,
+            "width": 192.0,
+            "height": 128.0,
+            "type": "Boolean Box",
+            "properties": {
+              "topic": "/SmartDashboard/Match/Modo precision",
+              "period": 0.06,
+              "true_color": 4283215696,
+              "false_color": 4287137928
+            }
+          },
+          {
+            "title": "Cargando",
+            "x": 960.0,
+            "y": 384.0,
+            "width": 192.0,
+            "height": 128.0,
+            "type": "Boolean Box",
+            "properties": {
+              "topic": "/SmartDashboard/Match/Cargando",
+              "period": 0.06,
+              "true_color": 4283215696,
+              "false_color": 4287137928
+            }
+          },
+          {
+            "title": "Field",
+            "x": 0.0,
+            "y": 512.0,
+            "width": 768.0,
+            "height": 384.0,
+            "type": "Field",
+            "properties": {
+              "topic": "/SmartDashboard/Field",
+              "period": 0.06,
+              "field_game": "Rebuilt",
+              "robot_width": 0.85,
+              "robot_length": 0.85,
+              "show_other_objects": true,
+              "show_trajectories": true,
+              "field_rotation": 0.0,
+              "robot_color": 4294945792,
+              "trajectory_color": 4294967295
+            }
+          },
+          {
+            "title": "Auto Choices",
+            "x": 768.0,
+            "y": 512.0,
+            "width": 384.0,
+            "height": 128.0,
+            "type": "ComboBox Chooser",
+            "properties": {
+              "topic": "/SmartDashboard/Auto Choices",
+              "period": 0.06,
+              "sort_options": false
+            }
+          },
+          {
+            "title": "Compensacion mov deg",
+            "x": 768.0,
+            "y": 640.0,
+            "width": 192.0,
+            "height": 128.0,
+            "type": "Text Display",
+            "properties": {
+              "topic": "/SmartDashboard/Match/Compensacion mov deg",
+              "period": 0.06
+            }
+          },
+          {
+            "title": "Velocidad campo mps",
+            "x": 960.0,
+            "y": 640.0,
+            "width": 192.0,
+            "height": 128.0,
+            "type": "Text Display",
+            "properties": {
+              "topic": "/SmartDashboard/Match/Velocidad campo mps",
+              "period": 0.06
+            }
+          },
+          {
+            "title": "FMSInfo",
+            "x": 768.0,
+            "y": 768.0,
+            "width": 384.0,
+            "height": 128.0,
+            "type": "FMSInfo",
+            "properties": {
+              "topic": "/FMSInfo",
+              "period": 0.06
+            }
+          },
+          {
+            "title": "Piloto",
+            "x": 0.0,
+            "y": 896.0,
+            "width": 512.0,
+            "height": 384.0,
+            "type": "Camera Stream",
+            "properties": {
+              "topic": "/CameraPublisher/Piloto",
+              "period": 0.06
+            }
+          },
+          {
+            "title": "Fuente rumbo",
+            "x": 512.0,
+            "y": 896.0,
+            "width": 256.0,
+            "height": 128.0,
+            "type": "Text Display",
+            "properties": {
+              "topic": "/SmartDashboard/Match/Fuente rumbo",
+              "period": 0.06
+            }
+          },
+          {
+            "title": "Sin ver tag s",
+            "x": 768.0,
+            "y": 896.0,
+            "width": 192.0,
+            "height": 128.0,
+            "type": "Text Display",
+            "properties": {
+              "topic": "/SmartDashboard/Match/Sin ver tag s",
+              "period": 0.06
+            }
+          },
+          {
+            "title": "Latencia ms",
+            "x": 960.0,
+            "y": 896.0,
+            "width": 192.0,
+            "height": 128.0,
+            "type": "Text Display",
+            "properties": {
+              "topic": "/SmartDashboard/Match/Latencia ms",
+              "period": 0.06
+            }
+          },
+          {
+            "title": "Alianza",
+            "x": 512.0,
+            "y": 1024.0,
+            "width": 256.0,
+            "height": 128.0,
+            "type": "Text Display",
+            "properties": {
+              "topic": "/SmartDashboard/Match/Alianza",
+              "period": 0.06
+            }
+          },
+          {
+            "title": "Poses por ciclo",
+            "x": 768.0,
+            "y": 1024.0,
+            "width": 192.0,
+            "height": 128.0,
+            "type": "Text Display",
+            "properties": {
+              "topic": "/SmartDashboard/Match/Vision/Poses por ciclo",
+              "period": 0.06
+            }
+          },
+          {
+            "title": "Pose aceptada",
+            "x": 960.0,
+            "y": 1024.0,
+            "width": 192.0,
+            "height": 128.0,
+            "type": "Boolean Box",
+            "properties": {
+              "topic": "/SmartDashboard/Match/Vision/Pose aceptada",
+              "period": 0.06,
+              "true_color": 4283215696,
+              "false_color": 4287137928
+            }
+          },
+          {
+            "title": "Ultimo rechazo",
+            "x": 512.0,
+            "y": 1152.0,
+            "width": 448.0,
+            "height": 128.0,
+            "type": "Text Display",
+            "properties": {
+              "topic": "/SmartDashboard/Match/Vision/Ultimo rechazo",
+              "period": 0.06
+            }
+          },
+          {
+            "title": "Sembrando rumbo",
+            "x": 960.0,
+            "y": 1152.0,
+            "width": 192.0,
+            "height": 128.0,
+            "type": "Boolean Box",
+            "properties": {
+              "topic": "/SmartDashboard/Match/Vision/Sembrando rumbo",
+              "period": 0.06,
+              "true_color": 4283215696,
+              "false_color": 4287137928
+            }
+          }
+        ]
+      }
+    },
+    {
       "name": "Demo",
       "grid_layout": {
         "layouts": [],

@@ -18,7 +18,7 @@ import edu.wpi.first.networktables.DoublePublisher;
 import edu.wpi.first.networktables.DoubleSubscriber;
 import edu.wpi.first.networktables.NetworkTableInstance;
 import edu.wpi.first.wpilibj.RobotController;
-import frc.robot.constants.DemoConstants;
+import frc.robot.constants.VisionConstants;
 import java.util.HashSet;
 import java.util.LinkedList;
 import java.util.List;
@@ -53,6 +53,7 @@ public class VisionIOLimelight implements VisionIO {
   private int lastPipeline = -1;
   private int lastPriorityId = Integer.MIN_VALUE;
   private int lastThrottle = Integer.MIN_VALUE;
+  private int lastImuMode = Integer.MIN_VALUE;
 
   /**
    * Creates a new VisionIOLimelight.
@@ -90,16 +91,12 @@ public class VisionIOLimelight implements VisionIO {
 
     // ── Limelight 4: modo de IMU ──────────────────────────────────────────
     //
-    // Sólo aplica a la LL4; en una LL2/2+ esta clave no existe y escribirla no
-    // hace nada, pero deja basura en la tabla que confunde al depurar.
-    //
-    // Si algún día vuelven a la LL4: se fuerza a modo externo (0) porque la IMU
-    // interna está atornillada a la cámara, y la cámara a la torreta. Cuando la
-    // torreta gira 90°, la IMU cree que el ROBOT giró 90°, y MegaTag2 recibiría
-    // un yaw que no corresponde al chasis.
-    if (DemoConstants.isLimelight4) {
-      imuModePublisher.accept(DemoConstants.limelight4ImuMode);
-    }
+    // El modo de IMU NO se fija aquí: lo gestiona Vision.periodic() según el
+    // estado del robot (ver Vision.setImuModes). En competencia la cámara es
+    // fija y se usa la IMU interna de la LL4 con el Pigeon como asistencia; en
+    // demo la cámara va en la torreta y se fuerza a IMU externa (0), porque la
+    // interna giraría con el mecanismo y MegaTag2 recibiría un yaw que no es el
+    // del chasis. En una LL2/2+ la clave no existe y no se escribe nada.
   }
 
   @Override
@@ -267,7 +264,7 @@ public class VisionIOLimelight implements VisionIO {
    */
   @Override
   public void setRobotToCamera(Transform3d robotToCamera) {
-    double sideSign = DemoConstants.limelightInvertSideAxis ? -1.0 : 1.0;
+    double sideSign = VisionConstants.limelightInvertSideAxis ? -1.0 : 1.0;
     cameraPosePublisher.accept(
         new double[] {
           robotToCamera.getX(),
@@ -290,17 +287,18 @@ public class VisionIOLimelight implements VisionIO {
   /** Gestión térmica. Sólo existe en la Limelight 4. */
   @Override
   public void setThrottle(int throttle) {
-    if (DemoConstants.isLimelight4 && throttle != lastThrottle) {
+    if (VisionConstants.isLimelight4 && throttle != lastThrottle) {
       throttlePublisher.accept(throttle);
       lastThrottle = throttle;
     }
   }
 
-  /** Modo de IMU. Sólo existe en la Limelight 4. */
+  /** Modo de IMU. Sólo existe en la Limelight 4. Se publica sólo al cambiar. */
   @Override
   public void setImuMode(int mode) {
-    if (DemoConstants.isLimelight4) {
+    if (VisionConstants.isLimelight4 && mode != lastImuMode) {
       imuModePublisher.accept(mode);
+      lastImuMode = mode;
     }
   }
 

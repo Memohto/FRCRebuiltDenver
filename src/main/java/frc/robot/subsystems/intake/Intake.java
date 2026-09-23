@@ -105,6 +105,16 @@ public class Intake extends SubsystemBase {
         return inputs.extensorCurrentAmps;
     }
 
+    /** Corriente de estator de los rodillos. Es lo que detecta que "piden" potencia. */
+    public double getRollersCurrentAmps() {
+        return inputs.rollersCurrentAmps;
+    }
+
+    /** Velocidad de los rodillos en rad/s (del mecanismo, ya con reducción). */
+    public double getRollersVelocityRadPerSec() {
+        return inputs.rollersVelocityRadPerSec;
+    }
+
     /** Congela el extensor donde está ahora mismo. */
     public void holdExtensorHere() {
         setExtensorPositionRad(getExtensorPositionRad());

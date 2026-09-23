@@ -17,6 +17,16 @@ import edu.wpi.first.math.interpolation.InterpolatingDoubleTreeMap;
  */
 public class DemoConstants {
 
+    // ────────────────────────────────────────────────────────────────────────
+    // NOTA (Competencia v2): las constantes de física del tiro
+    // (kTimeOfFlightMap, shootWhileMoving*, deadbands, fieldVelocityFilterAlpha,
+    // odometryTrustSeconds), las de agitación del intake y las de la Limelight 4
+    // ya NO se editan aquí. Viven en ShotConstants, IntakeConstants y
+    // VisionConstants, y este archivo sólo las re-exporta con el mismo nombre
+    // para que el código y la guía del demo sigan siendo válidos. Edítalas en su
+    // archivo de origen: cambiarlas aquí no compila (son final).
+    // ────────────────────────────────────────────────────────────────────────
+
     // ════════════════════════════════════════════════════════════════════════
     // SMOOTH DRIVE SYSTEM
     // ════════════════════════════════════════════════════════════════════════
@@ -157,7 +167,7 @@ public class DemoConstants {
      * convención WPILib "+Y = izquierda". Si al mover la torreta a la izquierda
      * la pose estimada se va a la derecha, pon esto en {@code true}.
      */
-    public static final boolean limelightInvertSideAxis = false;
+    public static final boolean limelightInvertSideAxis = VisionConstants.limelightInvertSideAxis;
 
     /**
      * Signo del ángulo de torreta al construir la transformada robot→cámara.
@@ -182,23 +192,12 @@ public class DemoConstants {
     // ── Modelo de cámara ───────────────────────────────────────────────────
 
     /**
-     * ¿Es una Limelight 4?
-     *
-     * <p>
-     * {@code false} = Limelight 2 / 2+ / 3. Es lo que tenemos montado.
-     *
-     * <p>
-     * Con esto en false, el código no escribe las claves de NetworkTables que
-     * sólo existen en la LL4 ({@code imumode_set}, {@code throttle_set}).
-     * Escribirlas en una LL2 no rompe nada — simplemente las ignora — pero deja
-     * basura en la tabla que confunde cuando alguien anda depurando.
-     *
-     * <p>
-     * Todo lo demás que usa el demo ({@code camerapose_robotspace_set},
-     * {@code priorityid}, {@code tl}/{@code cl}) funciona igual en la LL2
-     * siempre que tenga LimelightOS 2024 o más reciente.
+     * ¿Es una Limelight 4? <b>Alias de {@code VisionConstants.isLimelight4}</b>
+     * (la cámara física es la misma en demo y competencia; hoy es una LL4). En
+     * demo la cámara va en la torreta, así que su IMU interna se fuerza a modo
+     * externo ({@code limelight4ImuMode = 0}).
      */
-    public static final boolean isLimelight4 = false;
+    public static final boolean isLimelight4 = VisionConstants.isLimelight4;
 
     // ── Limelight 4 (inactivo mientras isLimelight4 sea false) ─────────────
 
@@ -222,7 +221,7 @@ public class DemoConstants {
      * Si algún día regresan la cámara a un montaje fijo, el modo 4 con
      * {@code imuAssistAlpha} vale mucho la pena.
      */
-    public static final int limelight4ImuMode = 0;
+    public static final int limelight4ImuMode = VisionConstants.limelight4ImuMode;
 
     /**
      * Throttle de la LL4 mientras el robot está deshabilitado.
@@ -233,10 +232,10 @@ public class DemoConstants {
      * de lo que parece en una demo: el robot pasa mucho más tiempo deshabilitado
      * en un pasillo que en una cancha.
      */
-    public static final int limelight4ThrottleDisabled = 150;
+    public static final int limelight4ThrottleDisabled = VisionConstants.limelight4ThrottleDisabled;
 
     /** Throttle con el robot habilitado. 0 = máximo rendimiento. */
-    public static final int limelight4ThrottleEnabled = 0;
+    public static final int limelight4ThrottleEnabled = VisionConstants.limelight4ThrottleEnabled;
 
     /**
      * Usar {@code priorityid} para el modo de tag fijado.
@@ -916,26 +915,26 @@ public class DemoConstants {
     // ════════════════════════════════════════════════════════════════════════
 
     /** Posición central de la oscilación al inicio (radianes de extensor). */
-    public static final double agitateStartCenterRad = 11.0;
+    public static final double agitateStartCenterRad = IntakeConstants.agitateStartCenterRad;
 
     /** Posición a la que converge la caja al final. */
-    public static final double agitateEndCenterRad = 4.0;
+    public static final double agitateEndCenterRad = IntakeConstants.agitateEndCenterRad;
 
     /** Amplitud inicial de la oscilación. */
-    public static final double agitateAmplitudeRad = 7.5;
+    public static final double agitateAmplitudeRad = IntakeConstants.agitateAmplitudeRad;
 
     /** Frecuencia de la agitación. */
-    public static final double agitateFrequencyHz = 1.2;
+    public static final double agitateFrequencyHz = IntakeConstants.agitateFrequencyHz;
 
     /**
      * Constante de tiempo del decaimiento. La amplitud cae a ~37% en este
      * tiempo, y a ~5% en 3× este tiempo. Con 2.5 s, la caja está prácticamente
      * cerrada a los 7.5 s.
      */
-    public static final double agitateDecaySeconds = 10;
+    public static final double agitateDecaySeconds = IntakeConstants.agitateDecaySeconds;
 
     /** Velocidad del rodillo durante la agitación. Lento, hacia adentro. */
-    public static final double agitateRollerSpeed = 0.375;
+    public static final double agitateRollerSpeed = IntakeConstants.agitateRollerSpeed;
 
     /**
      * Pre-roll: cuánto gira el rodillo ANTES de empezar a sacudir.
@@ -946,14 +945,14 @@ public class DemoConstants {
      * de terminar de entrar. Medio segundo de rodillo solo las acomoda adentro y
      * después ya se puede agitar sin perder nada.
      */
-    public static final double agitatePrerollSeconds = 1.5;
+    public static final double agitatePrerollSeconds = IntakeConstants.agitatePrerollSeconds;
 
     /** Límites duros. Deben quedar dentro de los soft limits del extensor. */
-    public static final double agitateMinRad = 3.0;
-    public static final double agitateMaxRad = 17.0;
+    public static final double agitateMinRad = IntakeConstants.agitateMinRad;
+    public static final double agitateMaxRad = IntakeConstants.agitateMaxRad;
 
     /** Si es true, la agitación arranca sola al alimentar (LB/RB). */
-    public static final boolean autoAgitateWhileFeeding = true;
+    public static final boolean autoAgitateWhileFeeding = IntakeConstants.autoAgitateWhileFeeding;
 
     // ════════════════════════════════════════════════════════════════════════
     // DISPARO SUAVE (STRIKER — hacia personas)
@@ -1016,7 +1015,7 @@ public class DemoConstants {
     }
 
     /** Distancia asumida cuando no hay medición de visión disponible. */
-    public static final double fallbackDistanceMeters = 3.0;
+    public static final double fallbackDistanceMeters = ShotConstants.fallbackDistanceMeters;
 
     /**
      * Rango físicamente sensato de distancia de tiro, en metros.
@@ -1027,9 +1026,9 @@ public class DemoConstants {
      * escalón: pasar de 0.51 a 0.49 m saltaba la potencia de la mínima a la de
      * 3 m en un ciclo. El fallback quedó sólo para NaN.
      */
-    public static final double minShotDistanceMeters = 0.5;
+    public static final double minShotDistanceMeters = ShotConstants.minShotDistanceMeters;
 
-    public static final double maxShotDistanceMeters = 12.0;
+    public static final double maxShotDistanceMeters = ShotConstants.maxShotDistanceMeters;
 
     // ════════════════════════════════════════════════════════════════════════
     //
@@ -1065,7 +1064,7 @@ public class DemoConstants {
      * empeorar los tiros en vez de mejorarlos. Enciéndelo cuando vayas a tunear,
      * con el procedimiento de la guía.
      */
-    public static final boolean shootWhileMovingEnabled = true;
+    public static final boolean shootWhileMovingEnabled = ShotConstants.shootWhileMovingEnabled;
 
     /**
      * Ganancia de la compensación. 1.0 = compensación teórica completa.
@@ -1076,10 +1075,10 @@ public class DemoConstants {
      * lateralmente los tiros se van MÁS al lado en vez de corregirse, el signo
      * está al revés y hay que revisarlo antes de seguir subiendo.
      */
-    public static final double shootWhileMovingGain = 1.0;
+    public static final double shootWhileMovingGain = ShotConstants.shootWhileMovingGain;
 
     /** Bajo esta velocidad no se compensa nada. Evita ruido en reposo. */
-    public static final double shootWhileMovingMinSpeed = 0.1;
+    public static final double shootWhileMovingMinSpeed = ShotConstants.shootWhileMovingMinSpeed;
 
     /**
      * Signo de la corrección angular. <b>Aquí se invierte, y sólo aquí.</b>
@@ -1113,7 +1112,7 @@ public class DemoConstants {
      * si una está invertida, esta constante lo tapa aquí pero el problema sigue
      * vivo en otro lado.
      */
-    public static final double shootWhileMovingAimSign = 1.0;
+    public static final double shootWhileMovingAimSign = ShotConstants.shootWhileMovingAimSign;
 
     /**
      * Iteraciones de convergencia.
@@ -1122,7 +1121,7 @@ public class DemoConstants {
      * Mover el objetivo cambia la distancia, y la distancia cambia el tiempo de
      * vuelo. Dos iteraciones convergen de sobra a distancias de FRC.
      */
-    public static final int shootWhileMovingIterations = 2;
+    public static final int shootWhileMovingIterations = ShotConstants.shootWhileMovingIterations;
 
     /**
      * Tope de la corrección, en metros.
@@ -1131,7 +1130,7 @@ public class DemoConstants {
      * Red de seguridad: si la velocidad estimada viene basura, sin esto la
      * torreta se iría a apuntar a un punto absurdo.
      */
-    public static final double shootWhileMovingMaxCompensationMeters = 2.5;
+    public static final double shootWhileMovingMaxCompensationMeters = ShotConstants.shootWhileMovingMaxCompensationMeters;
 
     /**
      * Tope de la corrección, ahora en ÁNGULO.
@@ -1148,7 +1147,7 @@ public class DemoConstants {
      * de vuelo, a 5 m del HUB, la corrección teórica ronda los 17°— y sigue
      * siendo un tope que se nota si algo sale mal.
      */
-    public static final double shootWhileMovingMaxAimOffsetRad = Math.toRadians(20.0);
+    public static final double shootWhileMovingMaxAimOffsetRad = ShotConstants.shootWhileMovingMaxAimOffsetRad;
 
     /**
      * Filtro de la velocidad de campo. 1.0 = sin filtrar.
@@ -1165,7 +1164,7 @@ public class DemoConstants {
      * dirección de verdad. Si la compensación tiembla, bájalo; si se siente
      * retrasada al arrancar y frenar, súbelo.
      */
-    public static final double fieldVelocityFilterAlpha = 0.2;
+    public static final double fieldVelocityFilterAlpha = ShotConstants.fieldVelocityFilterAlpha;
 
     /**
      * Deadband del setpoint del hood, en grados.
@@ -1181,10 +1180,10 @@ public class DemoConstants {
      * odometría cambia despacio. Con la compensación encendida la distancia se
      * mueve con la velocidad del robot, y sin este deadband el hood baila.
      */
-    public static final double hoodSetpointDeadbandDeg = 0.25;
+    public static final double hoodSetpointDeadbandDeg = ShotConstants.hoodSetpointDeadbandDeg;
 
     /** Deadband del setpoint del flywheel, en RPS. Misma razón que el hood. */
-    public static final double flywheelSetpointDeadbandRPS = 0.25;
+    public static final double flywheelSetpointDeadbandRPS = ShotConstants.flywheelSetpointDeadbandRPS;
 
     /**
      * Tiempo de vuelo de la pelota por distancia, en segundos.
@@ -1207,14 +1206,7 @@ public class DemoConstants {
      * las velocidades de {@code kShooterFlywheelMap}: crece con la distancia
      * porque la pelota recorre más y va perdiendo velocidad.
      */
-    public static final InterpolatingDoubleTreeMap kTimeOfFlightMap = new InterpolatingDoubleTreeMap();
-    static {
-        kTimeOfFlightMap.put(1.0, 0.40);
-        kTimeOfFlightMap.put(2.0, 0.53);
-        kTimeOfFlightMap.put(3.0, 0.67);
-        kTimeOfFlightMap.put(4.0, 0.81);
-        kTimeOfFlightMap.put(5.0, 0.95);
-    }
+    public static final InterpolatingDoubleTreeMap kTimeOfFlightMap = ShotConstants.kTimeOfFlightMap;
 
     // ════════════════════════════════════════════════════════════════════════
     //
@@ -1337,7 +1329,7 @@ public class DemoConstants {
      * barrer: sigue apuntando por odometría. Un swerve con Pigeon 2.0 deriva muy
      * poco en unos segundos, así que ser generoso aquí sale barato.
      */
-    public static final double odometryTrustSeconds = 8.0;
+    public static final double odometryTrustSeconds = ShotConstants.odometryTrustSeconds;
 
     /**
      * Elegir el HUB según la alianza que reporte la Driver Station.

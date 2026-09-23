@@ -2,6 +2,7 @@ package frc.robot.subsystems.turret;
 
 import static frc.robot.util.PhoenixUtil.*;
 
+import frc.robot.constants.CompetitionConstants;
 import frc.robot.constants.DemoConstants;
 import frc.robot.constants.RobotConstants;
 import frc.robot.constants.TurretConstants;
@@ -52,7 +53,11 @@ public class TurretIOTalonFX extends ShooterIOTalonFX implements TurretIO {
                     .withKD(DemoConstants.turretDemoKd)
                     .withKS(DemoConstants.turretDemoKs)
                     .withKV(DemoConstants.turretDemoKv);
+        } else if (!RobotConstants.isDemoMode && CompetitionConstants.useV2TurretGains) {
+            // Competencia v2: mismas ganancias sin integral, un poco más de kP.
+            rotationConfig.Slot0 = CompetitionConstants.turretGains;
         } else {
+            // Denver, tal cual.
             rotationConfig.Slot0 = TurretConstants.rotationMotorGains;
         }
         rotationConfig.Feedback.SensorToMechanismRatio = TurretConstants.rotationMotorGearRatio;
@@ -65,11 +70,14 @@ public class TurretIOTalonFX extends ShooterIOTalonFX implements TurretIO {
         // Perfiles más lentos en demo: para seguir un objetivo suavemente
         // conviene que el perfil no alcance a saturar entre comando y comando.
         boolean demoProfile = RobotConstants.isDemoMode && DemoConstants.useDemoTurretGains;
+        boolean v2Profile = !RobotConstants.isDemoMode && CompetitionConstants.useV2TurretGains;
         rotationConfig.MotionMagic.MotionMagicCruiseVelocity = demoProfile
                 ? DemoConstants.turretDemoCruiseRotPerSec
+                : v2Profile ? CompetitionConstants.turretCruiseRotPerSec
                 : TurretConstants.maxVelocityRotPerSec;
         rotationConfig.MotionMagic.MotionMagicAcceleration = demoProfile
                 ? DemoConstants.turretDemoAccelRotPerSecSec
+                : v2Profile ? CompetitionConstants.turretAccelRotPerSecSec
                 : TurretConstants.maxAccelerationRotPerSecSec;
         tryUntilOk(5, () -> rotationMotor.getConfigurator().apply(rotationConfig, 0.25));
         tryUntilOk(5, () -> rotationMotor.setPosition(0.0, 0.25));

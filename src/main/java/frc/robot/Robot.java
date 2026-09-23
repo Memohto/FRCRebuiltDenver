@@ -13,8 +13,13 @@ import edu.wpi.first.wpilibj2.command.Command;
 import edu.wpi.first.wpilibj2.command.CommandScheduler;
 import frc.robot.constants.RobotConstants;
 import frc.robot.constants.RobotConstants.RobotMode;
+import frc.robot.constants.CompetitionConstants;
+import frc.robot.util.CompetitionState;
 import frc.robot.util.DemoDashboard;
 import frc.robot.util.DemoState;
+import frc.robot.util.MatchDashboard;
+import edu.wpi.first.cameraserver.CameraServer;
+import edu.wpi.first.cscore.UsbCamera;
 
 import org.littletonrobotics.junction.LogFileUtil;
 import org.littletonrobotics.junction.LoggedRobot;
@@ -81,9 +86,31 @@ public class Robot extends LoggedRobot {
     // andar pasando el archivo por USB entre las laptops del equipo.
     WebServer.start(5800, Filesystem.getDeployDirectory().getPath());
 
+    // Cámara de piloto (HBVCAM por USB al roboRIO). Sólo video para Elastic:
+    // el Rio no tiene CPU para AprilTags. Resolución y FPS bajos a propósito
+    // por el límite de ancho de banda del FMS.
+    if (CompetitionConstants.useDriverCamera && RobotConstants.currentMode == RobotConstants.Mode.REAL) {
+      try {
+        UsbCamera driverCamera = CameraServer.startAutomaticCapture("Piloto", 0);
+        driverCamera.setResolution(
+            CompetitionConstants.driverCameraWidth, CompetitionConstants.driverCameraHeight);
+        driverCamera.setFPS(CompetitionConstants.driverCameraFps);
+        // Si la cámara se desconecta y reconecta, seguir intentando en vez de
+        // dejar el stream muerto.
+        driverCamera.setConnectionStrategy(UsbCamera.ConnectionStrategy.kKeepOpen);
+      } catch (Exception e) {
+        System.err.println("[Robot] No se pudo iniciar la cámara de piloto: " + e.getMessage());
+      }
+    }
+
     // Instantiate our RobotContainer. This will perform all our button bindings,
     // and put our autonomous chooser on the dashboard.
     robotContainer = new RobotContainer();
+
+    // Estado inicial de competencia al log, para que el primer frame ya lo traiga.
+    if (!RobotConstants.isDemoMode) {
+      CompetitionState.log();
+    }
   }
 
   /** This function is called periodically during all modes. */
@@ -102,6 +129,8 @@ public class Robot extends LoggedRobot {
     if (RobotConstants.isDemoMode) {
       DemoState.log();
       DemoDashboard.publish();
+    } else {
+      MatchDashboard.publish();
     }
   }
 
@@ -110,6 +139,8 @@ public class Robot extends LoggedRobot {
   public void disabledInit() {
     if (RobotConstants.isDemoMode) {
       DemoDashboard.reset();
+    } else {
+      MatchDashboard.reset();
     }
   }
 
@@ -148,6 +179,10 @@ public class Robot extends LoggedRobot {
     // cuanto lo habilitas porque quedó ese estado de la sesión anterior.
     if (RobotConstants.isDemoMode) {
       DemoState.reset();
+    } else {
+      // STRIKER → HUB. El operador elige otra cosa a propósito, no por
+      // herencia del partido anterior.
+      CompetitionState.reset();
     }
   }
 

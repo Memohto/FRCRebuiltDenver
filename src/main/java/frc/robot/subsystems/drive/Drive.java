@@ -42,7 +42,7 @@ import edu.wpi.first.wpilibj.smartdashboard.SmartDashboard;
 import edu.wpi.first.wpilibj2.command.Command;
 import edu.wpi.first.wpilibj2.command.SubsystemBase;
 import edu.wpi.first.wpilibj2.command.sysid.SysIdRoutine;
-import frc.robot.constants.DemoConstants;
+import frc.robot.constants.ShotConstants;
 import frc.robot.constants.RobotConstants;
 import frc.robot.constants.TunerConstants;
 import frc.robot.constants.RobotConstants.DriveMode;
@@ -262,7 +262,7 @@ public class Drive extends SubsystemBase {
       return;
     }
 
-    double alpha = MathUtil.clamp(DemoConstants.fieldVelocityFilterAlpha, 0.0, 1.0);
+    double alpha = MathUtil.clamp(ShotConstants.fieldVelocityFilterAlpha, 0.0, 1.0);
     filteredFieldVelocity =
         filteredFieldVelocity.plus(measured.minus(filteredFieldVelocity).times(alpha));
 

@@ -27,6 +27,24 @@ public class RobotConstants {
     }
 
     // ════════════════════════════════════════════════════════════════════════
+    // COMPETENCIA v2
+    // ════════════════════════════════════════════════════════════════════════
+
+    /**
+     * A qué le apunta el robot en competencia. Alterna con Back del operador.
+     *
+     * <ul>
+     * <li><b>HUB</b> — el HUB de la alianza (posición fija del campo).</li>
+     * <li><b>FEEDER</b> — un punto sobre la línea de la alianza a la misma Y del
+     * robot: pases hacia la zona de la propia alianza.</li>
+     * </ul>
+     */
+    public static enum CompetitionTarget {
+        HUB,
+        FEEDER
+    }
+
+    // ════════════════════════════════════════════════════════════════════════
     // DEMO MODE
     // ════════════════════════════════════════════════════════════════════════
 
@@ -41,10 +59,14 @@ public class RobotConstants {
      * sin ningún cambio de comportamiento.
      *
      * <p>
-     * Nada del código de competencia fue borrado ni modificado. Cambiar esta
-     * línea a {@code false} y desplegar te devuelve el robot de temporada.
+     * Con {@code false} se carga <b>Competencia v2</b>
+     * ({@code RobotContainer.configureCompetitionBindings}): el flujo de
+     * operación del demo (seleccionar modo → apuntar/cargar → alimentar) con
+     * Smooth Drive a velocidad de partido, torreta por odometría y la Limelight
+     * 4 fija. Los bindings originales de Denver siguen en
+     * {@code configureDenverBindings()} por si hay que volver a ellos.
      */
-    public static final boolean isDemoMode = true;
+    public static final boolean isDemoMode = false;
 
     /**
      * Un solo control para todo.

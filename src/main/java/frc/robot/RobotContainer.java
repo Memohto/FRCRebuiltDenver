@@ -29,6 +29,11 @@ import frc.robot.constants.DemoConstants;
 import frc.robot.util.DemoDashboard;
 import frc.robot.util.DemoState;
 import frc.robot.commands.DriveCommands;
+import frc.robot.commands.competition.CompDriveCommands;
+import frc.robot.commands.competition.CompShooterCommands;
+import frc.robot.commands.competition.CompTurretCommands;
+import frc.robot.util.CompetitionState;
+import frc.robot.util.MatchDashboard;
 import java.util.function.BooleanSupplier;
 import frc.robot.commands.IndexerCommands;
 import frc.robot.commands.IntakeCommands;
@@ -39,7 +44,9 @@ import frc.robot.constants.IntakeConstants;
 import frc.robot.constants.RobotConstants;
 import frc.robot.constants.ShooterConstants;
 import frc.robot.constants.TunerConstants;
+import frc.robot.constants.CompetitionConstants;
 import frc.robot.constants.TurretConstants;
+import frc.robot.constants.VisionConstants;
 import frc.robot.constants.RobotConstants.DriveMode;
 import frc.robot.constants.RobotConstants.RobotMode;
 import frc.robot.constants.RobotConstants.TurretMode;
@@ -261,6 +268,40 @@ public class RobotContainer {
       // competencia.
       vision.setPoseEstimationEnabled(() -> DemoConstants.useVisionOdometry);
       vision.setTrustedTagFilter(DemoState::isHubTag);
+
+      // La IMU interna de la LL4 gira con la torreta: se fuerza a externa.
+      if (VisionConstants.isLimelight4) {
+        vision.setImuModes(VisionConstants.limelight4ImuMode, VisionConstants.limelight4ImuMode);
+      }
+    } else {
+      // ════════════════════════════════════════════════════════════════════
+      // Cableado de la visión en COMPETENCIA: Limelight 4 fija en el cañón
+      // ════════════════════════════════════════════════════════════════════
+      //
+      // La cámara no se mueve, así que la transformada se publica UNA vez al
+      // arrancar desde VisionConstants (y la web UI de la Limelight debe estar
+      // en ceros). Todos los tags del campo corrigen la odometría; la torreta
+      // apunta por pose y no necesita ver nada.
+      if (VisionConstants.publishFixedCameraTransform) {
+        vision.setRobotToCamera(FIXED_CAMERA, VisionConstants.robotToLimelightFixed);
+      }
+      vision.setPoseEstimationEnabled(() -> true);
+      vision.setTrustedTagFilter(id -> true);
+
+      // Deshabilitado: MegaTag1 reescribe posición Y rumbo. Sin esto, en el
+      // taller el yaw del Pigeon no tiene relación con el tag y la torreta
+      // apunta a un HUB imaginario (MegaTag2 nunca corrige rotación).
+      if (VisionConstants.seedHeadingFromVisionWhileDisabled) {
+        vision.setHeadingSeeder(drive::setPose);
+      }
+
+      if (VisionConstants.isLimelight4) {
+        // Deshabilitado: siembra la IMU interna con el Pigeon. Habilitado: IMU
+        // interna con el Pigeon como asistencia (menos latencia en giros).
+        vision.setImuModes(
+            VisionConstants.limelight4ImuModeDisabled, VisionConstants.limelight4ImuModeEnabled);
+        vision.setThrottleManagementEnabled(true);
+      }
     }
 
     autoChooser = new LoggedDashboardChooser<>("Auto Choices", AutoBuilder.buildAutoChooser());
@@ -284,10 +325,21 @@ public class RobotContainer {
     // Configure the button bindings
     if (RobotConstants.isDemoMode) {
       configureDemoBindings();
+    } else if (useDenverBindings) {
+      configureDenverBindings();
     } else {
-      configureButtonBindings();
+      configureCompetitionBindings();
     }
   }
+
+  /** Índice de la Limelight fija en el arreglo de Vision. */
+  private static final int FIXED_CAMERA = 0;
+
+  /**
+   * Salida de emergencia: {@code true} carga los bindings de Denver tal cual
+   * (tres enums estáticos, PID de rumbo viejo) en vez de Competencia v2.
+   */
+  private static final boolean useDenverBindings = false;
 
   // ══════════════════════════════════════════════════════════════════════════
   //
@@ -563,6 +615,186 @@ public class RobotContainer {
                 shooter, turret));
   }
 
+  // ══════════════════════════════════════════════════════════════════════════
+  //
+  //  C O M P E T E N C I A   v 2
+  //
+  //  El flujo de operación del demo, a velocidad de partido:
+  //
+  //    1. SELECCIONAR MODO     (operador, Y)     STRIKER ↔ BOMBER
+  //       SELECCIONAR OBJETIVO (operador, Back)  HUB ↔ FEEDER
+  //    2. APUNTAR o CARGAR     (operador, X / RT)
+  //         X  = la torreta rastrea (STRIKER) o el chasis se alinea (BOMBER),
+  //              sin flywheels
+  //         RT = lo mismo + hood y flywheel a la solución de tiro (el gatillo)
+  //    3. ALIMENTAR            (operador, LB / RB — la Y-valve)
+  //
+  //  Sin botón la torreta está en cero y nada gira.
+  //
+  //  ── PILOTO (puerto 0) ─────────────────────────────────────────────────
+  //     Stick izq.  Traslación (field-relative, flip por alianza)
+  //     Stick der.  Giro. En BOMBER, mientras el operador apunta, el chasis
+  //                 se alinea solo; mover el stick fuerte lo cancela.
+  //     LT          Modo precisión (30%)
+  //     B           Reset del frente (igual que Denver)
+  //
+  //  ── MODO SOLO (CompetitionConstants.isSoloDriver = true) ─────────────
+  //     Todo lo del operador va al control del piloto (puerto 0). El reset
+  //     del frente se mueve a POV ← (B es retraer intake) y el modo
+  //     precisión desaparece (LT es rodillos).
+  //
+  //  ── OPERADOR (puerto 1) ───────────────────────────────────────────────
+  //     Y           STRIKER ↔ BOMBER
+  //     Back        HUB ↔ FEEDER
+  //     X (hold)    APUNTAR
+  //     RT (hold)   CARGAR
+  //     LB / RB     Alimentar cañón fijo / torreta (+ agitación automática)
+  //     LT          Rodillos de intake (0.8 + boost por carga)
+  //     A (hold)    Extender intake con remate por corriente
+  //     B (hold)    Retraer intake
+  //     POV ↓       Agitar la caja
+  //     POV →       Desatascar indexer (reversa)
+  //     POV ↑       Prueba de flywheels al 25% (pit)
+  //     LS / RS     Jog del extensor sin soft limits (recalibración)
+  //     Start       (libre)
+  //
+  // ══════════════════════════════════════════════════════════════════════════
+  private void configureCompetitionBindings() {
+    // En modo solo TODO va al control del piloto (puerto 0); el puerto 1 queda
+    // sin usar. Los Triggers se crean una sola vez y se reutilizan.
+    final boolean solo = CompetitionConstants.isSoloDriver;
+    final CommandXboxController mech = solo ? driverJoystick : mechanismsJoystick;
+
+    Trigger aimTrigger = mech.x();
+    Trigger chargeTrigger = mech.rightTrigger(0.5);
+    Trigger feedShooterTrigger = mech.leftBumper();
+    Trigger feedTurretTrigger = mech.rightBumper();
+
+    // "El chasis debe apuntar" = el operador está apuntando o cargando.
+    BooleanSupplier assistSupplier =
+        () -> aimTrigger.getAsBoolean() || chargeTrigger.getAsBoolean();
+
+    MatchDashboard.configure(vision, shooter, turret);
+
+    // ── PILOTO ─────────────────────────────────────────────────────────────
+
+    drive.setDefaultCommand(
+        CompDriveCommands.joystickDrive(
+            drive,
+            () -> -driverJoystick.getLeftY(),
+            () -> -driverJoystick.getLeftX(),
+            () -> -driverJoystick.getRightX(),
+            // En solo, LT es los rodillos del intake: no hay modo precisión.
+            () -> !solo && driverJoystick.getLeftTriggerAxis() > 0.5,
+            assistSupplier));
+
+    // Reset del frente: la rotación de la odometría a 0° (180° en rojo). La
+    // visión la sigue corrigiendo después, que es lo que queremos en cancha.
+    // En solo se va a POV izquierda porque B lo ocupa retraer el intake.
+    Trigger setFrontButton = solo ? mech.povLeft() : driverJoystick.b();
+    setFrontButton
+        .onTrue(
+            Commands.runOnce(
+                () -> {
+                  drive.setPose(
+                      new Pose2d(
+                          drive.getPose().getTranslation(),
+                          CompetitionState.isRedAlliance() ? Rotation2d.k180deg : Rotation2d.kZero));
+                },
+                drive)
+                .ignoringDisable(true));
+
+    // ── OPERADOR: selección de modo y objetivo ─────────────────────────────
+
+    mech.y().onTrue(Commands.runOnce(CompetitionState::toggleMode).ignoringDisable(true));
+    mech.back().onTrue(Commands.runOnce(CompetitionState::toggleTarget).ignoringDisable(true));
+
+    // ── Apuntado y carga ───────────────────────────────────────────────────
+
+    turret.setDefaultCommand(
+        CompTurretCommands.turretCmd(
+            turret, drive, aimTrigger::getAsBoolean, chargeTrigger::getAsBoolean));
+
+    shooter.setDefaultCommand(
+        CompShooterCommands.shooterCmd(shooter, drive, chargeTrigger::getAsBoolean));
+
+    // ── Alimentar con la Y-valve ───────────────────────────────────────────
+
+    indexer.setDefaultCommand(
+        IndexerCommands.joystickIndexerCmd(
+            indexer,
+            feedShooterTrigger::getAsBoolean,
+            feedTurretTrigger::getAsBoolean));
+
+    // ── Agitación ──────────────────────────────────────────────────────────
+
+    if (IntakeConstants.autoAgitateWhileFeeding) {
+      feedShooterTrigger.or(feedTurretTrigger).whileTrue(IntakeCommands.agitate(intake));
+    }
+    mech.povDown().whileTrue(IntakeCommands.agitate(intake));
+
+    // ── Intake ─────────────────────────────────────────────────────────────
+
+    // Rodillos a 0.8 de base, con boost automático al 100% cuando la corriente
+    // o la velocidad dicen que están empujando contra la caja llena.
+    mech.leftTrigger(0.5).whileTrue(IntakeCommands.intakeWithBoost(intake));
+
+    mech
+        .povRight()
+        .whileTrue(Commands.runEnd(indexer::outtake, indexer::stopIndexer, indexer));
+
+    mech.a().whileTrue(IntakeCommands.extendWithStallHoming(intake));
+
+    mech
+        .b()
+        .whileTrue(Commands.startEnd(intake::setExtendedReset, intake::stopExtensor, intake));
+
+    // Jog sin soft limits — sólo para recalibrar contra el tope mecánico.
+    mech
+        .rightStick()
+        .whileTrue(
+            Commands.runEnd(
+                () -> {
+                  intake.setSoftwareLimit(false);
+                  intake.extend();
+                },
+                () -> {
+                  intake.setSoftwareLimit(true);
+                  intake.stopExtensor();
+                },
+                intake));
+
+    mech
+        .leftStick()
+        .whileTrue(
+            Commands.runEnd(
+                () -> {
+                  intake.setSoftwareLimit(false);
+                  intake.retract();
+                },
+                () -> {
+                  intake.setSoftwareLimit(true);
+                  intake.stopExtensor();
+                },
+                intake));
+
+    // ── Prueba de pit ──────────────────────────────────────────────────────
+
+    mech
+        .povUp()
+        .whileTrue(
+            Commands.runEnd(
+                () -> {
+                  shooter.setFlywheelOpenLoop(0.25);
+                  turret.setFlywheelOpenLoop(0.25);
+                },
+                () -> {
+                  shooter.stopFlywheel();
+                  turret.stopFlywheel();
+                },
+                shooter, turret));
+  }
+
   /**
    * Use this method to define your button->command mappings. Buttons can be
    * created by
@@ -571,7 +803,7 @@ public class RobotContainer {
    * it to a {@link
    * edu.wpi.first.wpilibj2.command.button.JoystickButton}.
    */
-  private void configureButtonBindings() {
+  private void configureDenverBindings() {
     // State machine
     driverJoystick.x().onTrue(Commands.runOnce(() -> {
       Drive.mode = Drive.mode != DriveMode.ORBIT ? DriveMode.ORBIT : DriveMode.NORMAL;

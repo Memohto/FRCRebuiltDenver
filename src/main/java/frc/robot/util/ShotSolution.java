@@ -6,7 +6,7 @@ import edu.wpi.first.math.MathUtil;
 import edu.wpi.first.math.geometry.Pose2d;
 import edu.wpi.first.math.geometry.Rotation2d;
 import edu.wpi.first.math.geometry.Translation2d;
-import frc.robot.constants.DemoConstants;
+import frc.robot.constants.ShotConstants;
 
 /**
  * Solución de tiro: a dónde apuntar y a qué distancia.
@@ -128,7 +128,7 @@ public class ShotSolution {
 
         Translation2d robot = robotPose.getTranslation();
         double staticDistance = robot.getDistance(target);
-        double staticTof = DemoConstants.kTimeOfFlightMap.get(clampDistance(staticDistance));
+        double staticTof = ShotConstants.kTimeOfFlightMap.get(clampDistance(staticDistance));
 
         // Sin compensación: apuntar directo al objetivo.
         //
@@ -137,12 +137,12 @@ public class ShotSolution {
         // la pose o desde los módulos, y la distancia mínima evita calcular un
         // rumbo encima del objetivo, donde unos centímetros son decenas de
         // grados.
-        if (!DemoConstants.shootWhileMovingEnabled
+        if (!ShotConstants.shootWhileMovingEnabled
                 || fieldVelocity == null
                 || !Double.isFinite(fieldVelocity.getNorm())
-                || fieldVelocity.getNorm() < DemoConstants.shootWhileMovingMinSpeed
+                || fieldVelocity.getNorm() < ShotConstants.shootWhileMovingMinSpeed
                 || !Double.isFinite(staticDistance)
-                || staticDistance < DemoConstants.minShotDistanceMeters) {
+                || staticDistance < ShotConstants.minShotDistanceMeters) {
             return new ShotSolution(
                     target, clampDistance(staticDistance), staticTof, 0.0, 0.0);
         }
@@ -150,22 +150,22 @@ public class ShotSolution {
         // Objetivo virtual, con un par de iteraciones para converger.
         Translation2d aim = target;
         double tof = staticTof;
-        for (int i = 0; i < DemoConstants.shootWhileMovingIterations; i++) {
-            tof = DemoConstants.kTimeOfFlightMap.get(clampDistance(robot.getDistance(aim)));
-            Translation2d offset = fieldVelocity.times(-tof * DemoConstants.shootWhileMovingGain);
+        for (int i = 0; i < ShotConstants.shootWhileMovingIterations; i++) {
+            tof = ShotConstants.kTimeOfFlightMap.get(clampDistance(robot.getDistance(aim)));
+            Translation2d offset = fieldVelocity.times(-tof * ShotConstants.shootWhileMovingGain);
 
             // Tope de seguridad: si la velocidad estimada viene basura, la
             // corrección se dispara y la torreta se va a un punto absurdo.
-            if (offset.getNorm() > DemoConstants.shootWhileMovingMaxCompensationMeters) {
+            if (offset.getNorm() > ShotConstants.shootWhileMovingMaxCompensationMeters) {
                 offset = offset.times(
-                        DemoConstants.shootWhileMovingMaxCompensationMeters / offset.getNorm());
+                        ShotConstants.shootWhileMovingMaxCompensationMeters / offset.getNorm());
             }
             aim = target.plus(offset);
         }
 
         // El tiempo de vuelo que se reporta tiene que ser el del punto de mira
         // que devolvemos, no el de la iteración anterior.
-        tof = DemoConstants.kTimeOfFlightMap.get(clampDistance(robot.getDistance(aim)));
+        tof = ShotConstants.kTimeOfFlightMap.get(clampDistance(robot.getDistance(aim)));
 
         // ── Corrección angular ──────────────────────────────────────────────
         // Es la diferencia de rumbos vista DESDE EL ROBOT, no la orientación
@@ -177,7 +177,7 @@ public class ShotSolution {
         // El objetivo virtual puede caer encima del robot aunque el real esté
         // lejos: la corrección llega a 2.5 m. Sin esta guarda, atan2(0,0) da un
         // rumbo inventado que cambia de signo con el ruido.
-        if (toAim.getNorm() < DemoConstants.minShotDistanceMeters) {
+        if (toAim.getNorm() < ShotConstants.minShotDistanceMeters) {
             return new ShotSolution(
                     target, clampDistance(staticDistance), staticTof, 0.0, 0.0);
         }
@@ -190,9 +190,9 @@ public class ShotSolution {
         // alcanza como red de seguridad: 2.5 m son 15° a 9 m pero más de 60° a
         // 2 m.
         double offsetRad = MathUtil.clamp(
-                rawOffsetRad * DemoConstants.shootWhileMovingAimSign,
-                -DemoConstants.shootWhileMovingMaxAimOffsetRad,
-                DemoConstants.shootWhileMovingMaxAimOffsetRad);
+                rawOffsetRad * ShotConstants.shootWhileMovingAimSign,
+                -ShotConstants.shootWhileMovingMaxAimOffsetRad,
+                ShotConstants.shootWhileMovingMaxAimOffsetRad);
 
         if (!Double.isFinite(offsetRad)) {
             offsetRad = 0.0;
@@ -231,19 +231,19 @@ public class ShotSolution {
      */
     private static double clampDistance(double distance) {
         if (!Double.isFinite(distance)) {
-            return DemoConstants.fallbackDistanceMeters;
+            return ShotConstants.fallbackDistanceMeters;
         }
         return MathUtil.clamp(
-                distance, DemoConstants.minShotDistanceMeters, DemoConstants.maxShotDistanceMeters);
+                distance, ShotConstants.minShotDistanceMeters, ShotConstants.maxShotDistanceMeters);
     }
 
     /** Publica la solución al log. Se llama una sola vez por ciclo. */
     public void log() {
-        Logger.recordOutput("Demo/Shot/AimPoint", aimPoint);
-        Logger.recordOutput("Demo/Shot/DistanceMeters", distanceMeters);
-        Logger.recordOutput("Demo/Shot/TimeOfFlightSec", timeOfFlightSeconds);
-        Logger.recordOutput("Demo/Shot/CompensationMeters", compensationMeters);
-        Logger.recordOutput("Demo/Shot/AimOffsetDeg", Math.toDegrees(aimOffsetRad));
+        Logger.recordOutput("Shot/AimPoint", aimPoint);
+        Logger.recordOutput("Shot/DistanceMeters", distanceMeters);
+        Logger.recordOutput("Shot/TimeOfFlightSec", timeOfFlightSeconds);
+        Logger.recordOutput("Shot/CompensationMeters", compensationMeters);
+        Logger.recordOutput("Shot/AimOffsetDeg", Math.toDegrees(aimOffsetRad));
         // El dashboard NO se escribe aquí. Lo llena quien apunta, con el valor
         // que de verdad aplicó — que no siempre es éste, porque en caza libre la
         // compensación se calcula contra el HUB y no se usa. Escribirlo en los

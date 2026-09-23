@@ -19,7 +19,7 @@ import edu.wpi.first.wpilibj.Alert;
 import edu.wpi.first.wpilibj.Alert.AlertType;
 import edu.wpi.first.wpilibj.DriverStation;
 import edu.wpi.first.wpilibj2.command.SubsystemBase;
-import frc.robot.constants.DemoConstants;
+import frc.robot.constants.VisionConstants;
 import frc.robot.subsystems.vision.VisionIO.PoseObservationType;
 import frc.robot.subsystems.vision.VisionIO.VisionIOInputsAutoLogged;
 
@@ -55,6 +55,38 @@ public class Vision extends SubsystemBase {
 
   /** Gestión térmica automática de la Limelight 4. */
   private boolean throttleManagement = false;
+
+  /**
+   * Modos de IMU de la Limelight 4 según el estado del robot. {@code null} =
+   * no se gestiona (LL2/2+, o nadie lo configuró).
+   */
+  private Integer imuModeDisabled = null;
+  private Integer imuModeEnabled = null;
+
+  /**
+   * Siembra del rumbo por MegaTag1 mientras el robot está deshabilitado.
+   *
+   * <p>
+   * MegaTag2 <b>nunca corrige la rotación</b> ({@code angularStdDevMegatag2Factor
+   * = ∞}): confía en el yaw que le mandamos y resuelve sólo la posición. Eso
+   * está bien en cancha, donde el piloto fija el frente con B mirando al lado
+   * contrario. En el taller, con un tag en la pared y el robot en cualquier
+   * orientación, el yaw del giroscopio no tiene nada que ver con el marco del
+   * tag, MegaTag2 calcula una posición coherente con ese yaw equivocado y la
+   * torreta apunta a un HUB imaginario. Con esto, mientras está deshabilitado y
+   * ve un tag con buena ambigüedad, la pose completa (posición <b>y rumbo</b>) se
+   * reescribe desde MegaTag1. Al habilitar, MegaTag2 toma el relevo con un yaw
+   * que ya es coherente con el campo.
+   */
+  private java.util.function.Consumer<Pose2d> headingSeeder = null;
+  private double lastSeedTimestamp = -1000.0;
+  private boolean seededThisCycle = false;
+
+  // ── Diagnóstico ──────────────────────────────────────────────────────────
+  private String lastRejectReason = "—";
+  private double lastAcceptedTimestamp = -1000.0;
+  private int observationsThisCycle = 0;
+  private int acceptedThisCycle = 0;
 
   /**
    * Qué tags tienen permiso de corregir la odometría.
@@ -215,6 +247,52 @@ public class Vision extends SubsystemBase {
   }
 
   /**
+   * Gestiona el modo de IMU de la Limelight 4 según el estado del robot.
+   *
+   * <p>
+   * Deshabilitado se siembra la IMU interna con el yaw del Pigeon (modo 1) y
+   * habilitado se usa la interna con el Pigeon como asistencia (modo 4). Pasar
+   * el mismo valor en los dos fija un modo único (el demo usa 0/0 porque su
+   * cámara gira con la torreta). El IO sólo escribe cuando el modo cambia.
+   */
+  public void setImuModes(int whenDisabled, int whenEnabled) {
+    this.imuModeDisabled = whenDisabled;
+    this.imuModeEnabled = whenEnabled;
+  }
+
+  /**
+   * Activa la siembra del rumbo por MegaTag1 mientras el robot está
+   * deshabilitado. Normalmente {@code drive::setPose}.
+   */
+  public void setHeadingSeeder(java.util.function.Consumer<Pose2d> seeder) {
+    this.headingSeeder = seeder;
+  }
+
+  /** Por qué se rechazó la última observación de pose ("—" si ninguna). */
+  public String getLastRejectReason() {
+    return lastRejectReason;
+  }
+
+  /** Segundos desde la última pose aceptada por el estimador. */
+  public double secondsSinceAcceptedPose() {
+    return edu.wpi.first.wpilibj.Timer.getFPGATimestamp() - lastAcceptedTimestamp;
+  }
+
+  /** Observaciones de pose (MT1 + MT2) que llegaron en el último ciclo. */
+  public int getObservationsLastCycle() {
+    return observationsThisCycle;
+  }
+
+  public int getAcceptedLastCycle() {
+    return acceptedThisCycle;
+  }
+
+  /** ¿Se reescribió la pose desde MegaTag1 en el último ciclo? */
+  public boolean seededHeadingLastCycle() {
+    return seededThisCycle;
+  }
+
+  /**
    * Publica la transformada robot→cámara. Con la Limelight en la torreta hay
    * que llamarlo cada ciclo con el ángulo actual del mecanismo.
    */
@@ -250,10 +328,19 @@ public class Vision extends SubsystemBase {
     if (throttleManagement) {
       int throttle =
           DriverStation.isEnabled()
-              ? DemoConstants.limelight4ThrottleEnabled
-              : DemoConstants.limelight4ThrottleDisabled;
+              ? VisionConstants.limelight4ThrottleEnabled
+              : VisionConstants.limelight4ThrottleDisabled;
       for (VisionIO camera : io) {
         camera.setThrottle(throttle);
+      }
+    }
+
+    // Modo de IMU de la LL4. Se pide cada ciclo pero el IO sólo publica al
+    // cambiar, así que en la práctica son dos escrituras por partido.
+    if (imuModeDisabled != null && imuModeEnabled != null) {
+      int mode = DriverStation.isEnabled() ? imuModeEnabled : imuModeDisabled;
+      for (VisionIO camera : io) {
+        camera.setImuMode(mode);
       }
     }
 
@@ -267,6 +354,10 @@ public class Vision extends SubsystemBase {
     List<Pose3d> allRobotPoses = new LinkedList<>();
     List<Pose3d> allRobotPosesAccepted = new LinkedList<>();
     List<Pose3d> allRobotPosesRejected = new LinkedList<>();
+
+    observationsThisCycle = 0;
+    acceptedThisCycle = 0;
+    seededThisCycle = false;
 
     // Loop over cameras
     for (int cameraIndex = 0; cameraIndex < io.length; cameraIndex++) {
@@ -289,24 +380,31 @@ public class Vision extends SubsystemBase {
 
       // Loop over pose observations
       for (var observation : inputs[cameraIndex].poseObservations) {
-        // Check whether to reject pose
-        boolean rejectPose =
-            observation.tagCount() == 0 // Must have at least one tag
-                || (observation.tagCount() == 1
-                    && observation.ambiguity() > maxAmbiguity) // Cannot be high ambiguity
-                || Math.abs(observation.pose().getZ())
-                    > maxZError // Must have realistic Z coordinate
+        observationsThisCycle++;
 
-                // Must be within the field boundaries
-                || observation.pose().getX() < 0.0
-                || observation.pose().getX() > aprilTagLayout.getFieldLength()
-                || observation.pose().getY() < 0.0
-                || observation.pose().getY() > aprilTagLayout.getFieldWidth();
+        // Check whether to reject pose. Se guarda el MOTIVO, porque "la pose
+        // no entra" sin saber por qué es indepurable desde el pit.
+        String reason = null;
+        if (observation.tagCount() == 0) {
+          reason = "SIN TAGS";
+        } else if (observation.tagCount() == 1 && observation.ambiguity() > maxAmbiguity) {
+          reason = String.format("AMBIGUEDAD %.2f (MT1, 1 tag)", observation.ambiguity());
+        } else if (Math.abs(observation.pose().getZ()) > maxZError) {
+          reason = String.format("Z %.2f m (transformada de camara?)", observation.pose().getZ());
+        } else if (observation.pose().getX() < 0.0
+            || observation.pose().getX() > aprilTagLayout.getFieldLength()
+            || observation.pose().getY() < 0.0
+            || observation.pose().getY() > aprilTagLayout.getFieldWidth()) {
+          reason = String.format("FUERA DE CANCHA (%.1f, %.1f)",
+              observation.pose().getX(), observation.pose().getY());
+        }
+        boolean rejectPose = reason != null;
 
         // Add pose to log
         robotPoses.add(observation.pose());
         if (rejectPose) {
           robotPosesRejected.add(observation.pose());
+          lastRejectReason = reason;
         } else {
           robotPosesAccepted.add(observation.pose());
         }
@@ -314,6 +412,21 @@ public class Vision extends SubsystemBase {
         // Skip if rejected
         if (rejectPose) {
           continue;
+        }
+
+        // ── Siembra del rumbo (deshabilitado, MegaTag1) ──────────────────
+        // Va ANTES de mandar la observación al estimador: setPose reinicia el
+        // estimador con posición y rumbo, y la observación de después sólo lo
+        // refina.
+        if (headingSeeder != null
+            && DriverStation.isDisabled()
+            && observation.type() == PoseObservationType.MEGATAG_1
+            && edu.wpi.first.wpilibj.Timer.getFPGATimestamp() - lastSeedTimestamp
+                > VisionConstants.headingSeedPeriodSeconds) {
+          headingSeeder.accept(observation.pose().toPose2d());
+          lastSeedTimestamp = edu.wpi.first.wpilibj.Timer.getFPGATimestamp();
+          seededThisCycle = true;
+          Logger.recordOutput("Vision/HeadingSeedPose", observation.pose().toPose2d());
         }
 
         // Calculate standard deviations
@@ -347,6 +460,13 @@ public class Vision extends SubsystemBase {
           // Marca de tiempo para saber hasta cuándo le podemos seguir creyendo
           // a la odometría sin ver nada.
           frc.robot.util.FieldTracking.notePoseUpdate();
+          lastAcceptedTimestamp = edu.wpi.first.wpilibj.Timer.getFPGATimestamp();
+          acceptedThisCycle++;
+          lastRejectReason = "—";
+        } else if (!allTagsTrusted) {
+          lastRejectReason = "TAG NO CONFIABLE (filtro)";
+        } else {
+          lastRejectReason = "POSE DESACTIVADA";
         }
       }
 
@@ -370,6 +490,10 @@ public class Vision extends SubsystemBase {
     }
 
     // Log summary data
+    Logger.recordOutput("Vision/Summary/Observations", observationsThisCycle);
+    Logger.recordOutput("Vision/Summary/Accepted", acceptedThisCycle);
+    Logger.recordOutput("Vision/Summary/LastRejectReason", lastRejectReason);
+    Logger.recordOutput("Vision/Summary/HeadingSeeded", seededThisCycle);
     Logger.recordOutput("Vision/Summary/TagPoses", allTagPoses.toArray(new Pose3d[0]));
     Logger.recordOutput("Vision/Summary/RobotPoses", allRobotPoses.toArray(new Pose3d[0]));
     Logger.recordOutput(
