@@ -28,14 +28,14 @@
             }
           },
           {
-            "title": "Camara",
+            "title": "Limelight",
             "x": 768.0,
             "y": 0.0,
             "width": 384.0,
             "height": 384.0,
             "type": "Camera Stream",
             "properties": {
-              "topic": "/CameraPublisher/Piloto",
+              "topic": "/CameraPublisher/Limelight",
               "period": 0.06
             }
           },

@@ -323,8 +323,35 @@ public final class CompetitionConstants {
     // PhotonVision, se conecta con VisionIOPhotonVision y pasa a ser fuente de
     // odometría.
 
-    /** Arrancar el stream de la cámara USB del roboRIO. */
-    public static final boolean useDriverCamera = true;
+    /**
+     * Arrancar el stream de la cámara USB del roboRIO.
+     *
+     * <p>
+     * Apagada (2026-10-12): el dashboard usa ahora el video de la Limelight. Se
+     * apaga para no gastar CPU del Rio ni ancho de banda del FMS en un stream
+     * que nadie ve.
+     */
+    public static final boolean useDriverCamera = false;
+
+    // ── Video de la Limelight en el dashboard ─────────────────────────────
+
+    /**
+     * Registrar el stream de la Limelight en CameraServer para que Elastic lo
+     * encuentre como {@code /CameraPublisher/Limelight}. No consume CPU del Rio:
+     * el video va directo de la Limelight a la laptop.
+     */
+    public static final boolean useLimelightStream = true;
+
+    /**
+     * URLs del stream MJPEG de la Limelight, en orden de preferencia. Elastic
+     * prueba la siguiente si una falla. La IP fija es la que se configura en la
+     * web UI de la Limelight (recomendado 10.67.2.11); si le pusieron otra,
+     * cámbiala aquí. El .local puede no resolver en el FMS.
+     */
+    public static final String[] limelightStreamUrls = {
+        "http://10.67.2.11:5800/stream.mjpg",
+        "http://limelight-fixed.local:5800/stream.mjpg"
+    };
 
     /**
      * Resolución y FPS del stream. Bajos a propósito: el FMS limita el ancho de

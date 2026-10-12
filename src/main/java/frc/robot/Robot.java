@@ -19,6 +19,7 @@ import frc.robot.util.DemoDashboard;
 import frc.robot.util.DemoState;
 import frc.robot.util.MatchDashboard;
 import edu.wpi.first.cameraserver.CameraServer;
+import edu.wpi.first.cscore.HttpCamera;
 import edu.wpi.first.cscore.UsbCamera;
 
 import org.littletonrobotics.junction.LogFileUtil;
@@ -100,6 +101,18 @@ public class Robot extends LoggedRobot {
         driverCamera.setConnectionStrategy(UsbCamera.ConnectionStrategy.kKeepOpen);
       } catch (Exception e) {
         System.err.println("[Robot] No se pudo iniciar la cámara de piloto: " + e.getMessage());
+      }
+    }
+
+    // Video de la Limelight para Elastic. Sólo se registra la URL en
+    // CameraServer (/CameraPublisher/Limelight); el video no pasa por el Rio.
+    if (CompetitionConstants.useLimelightStream && RobotConstants.currentMode == RobotConstants.Mode.REAL) {
+      try {
+        HttpCamera limelightStream = new HttpCamera(
+            "Limelight", CompetitionConstants.limelightStreamUrls, HttpCamera.HttpCameraKind.kMJPGStreamer);
+        CameraServer.addCamera(limelightStream);
+      } catch (Exception e) {
+        System.err.println("[Robot] No se pudo registrar el stream de la Limelight: " + e.getMessage());
       }
     }
 
