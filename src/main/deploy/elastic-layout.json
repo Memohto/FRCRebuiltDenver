@@ -28,10 +28,10 @@
             }
           },
           {
-            "title": "Cámara piloto",
+            "title": "Camara",
             "x": 768.0,
             "y": 0.0,
-            "width": 512.0,
+            "width": 384.0,
             "height": 384.0,
             "type": "Camera Stream",
             "properties": {
@@ -41,10 +41,10 @@
           },
           {
             "title": "LISTO PARA TIRAR",
-            "x": 1280.0,
+            "x": 1152.0,
             "y": 0.0,
-            "width": 640.0,
-            "height": 256.0,
+            "width": 384.0,
+            "height": 128.0,
             "type": "Boolean Box",
             "properties": {
               "topic": "/SmartDashboard/Match/LISTO PARA TIRAR",
@@ -54,19 +54,34 @@
             }
           },
           {
-            "title": "Estado",
-            "x": 1280.0,
-            "y": 256.0,
-            "width": 640.0,
+            "title": "Modo",
+            "x": 1152.0,
+            "y": 128.0,
+            "width": 384.0,
             "height": 128.0,
             "type": "Large Text Display",
             "properties": {
-              "topic": "/SmartDashboard/Match/Estado",
+              "topic": "/SmartDashboard/Match/Modo",
               "period": 0.06
             }
           },
           {
-            "title": "Autónomo",
+            "title": "Tiempo",
+            "x": 1152.0,
+            "y": 256.0,
+            "width": 384.0,
+            "height": 128.0,
+            "type": "Match Time",
+            "properties": {
+              "topic": "/SmartDashboard/Match/Tiempo",
+              "period": 0.06,
+              "time_display_mode": "Minutes and Seconds",
+              "red_start_time": 15,
+              "yellow_start_time": 30
+            }
+          },
+          {
+            "title": "Autonomo",
             "x": 0.0,
             "y": 384.0,
             "width": 384.0,
@@ -79,107 +94,10 @@
             }
           },
           {
-            "title": "Torreta apuntada",
+            "title": "Bateria",
             "x": 384.0,
             "y": 384.0,
-            "width": 256.0,
-            "height": 128.0,
-            "type": "Boolean Box",
-            "properties": {
-              "topic": "/SmartDashboard/Match/Torreta apuntada",
-              "period": 0.06,
-              "true_color": 4283215696,
-              "false_color": 4287137928
-            }
-          },
-          {
-            "title": "Flywheels listos",
-            "x": 640.0,
-            "y": 384.0,
-            "width": 256.0,
-            "height": 128.0,
-            "type": "Boolean Box",
-            "properties": {
-              "topic": "/SmartDashboard/Match/Flywheels listos",
-              "period": 0.06,
-              "true_color": 4283215696,
-              "false_color": 4287137928
-            }
-          },
-          {
-            "title": "PASE (zona neutral)",
-            "x": 896.0,
-            "y": 384.0,
-            "width": 256.0,
-            "height": 128.0,
-            "type": "Boolean Box",
-            "properties": {
-              "topic": "/SmartDashboard/Match/PASE (zona neutral)",
-              "period": 0.06,
-              "true_color": 4294940672,
-              "false_color": 4287137928
-            }
-          },
-          {
-            "title": "Odometría fresca",
-            "x": 1152.0,
-            "y": 384.0,
-            "width": 256.0,
-            "height": 128.0,
-            "type": "Boolean Box",
-            "properties": {
-              "topic": "/SmartDashboard/Match/Odometria fresca",
-              "period": 0.06,
-              "true_color": 4283215696,
-              "false_color": 4294198070
-            }
-          },
-          {
-            "title": "Limelight OK",
-            "x": 1408.0,
-            "y": 384.0,
-            "width": 256.0,
-            "height": 128.0,
-            "type": "Boolean Box",
-            "properties": {
-              "topic": "/SmartDashboard/Match/Limelight OK",
-              "period": 0.06,
-              "true_color": 4283215696,
-              "false_color": 4294198070
-            }
-          },
-          {
-            "title": "Alianza",
-            "x": 1664.0,
-            "y": 384.0,
-            "width": 256.0,
-            "height": 128.0,
-            "type": "Text Display",
-            "properties": {
-              "topic": "/SmartDashboard/Match/Alianza",
-              "period": 0.06
-            }
-          },
-          {
-            "title": "Tiempo",
-            "x": 0.0,
-            "y": 512.0,
-            "width": 512.0,
-            "height": 128.0,
-            "type": "Match Time",
-            "properties": {
-              "topic": "/SmartDashboard/Match/Tiempo",
-              "period": 0.06,
-              "time_display_mode": "Minutes and Seconds",
-              "red_start_time": 15,
-              "yellow_start_time": 30
-            }
-          },
-          {
-            "title": "Batería (V)",
-            "x": 512.0,
-            "y": 512.0,
-            "width": 768.0,
+            "width": 384.0,
             "height": 128.0,
             "type": "Voltage View",
             "properties": {
@@ -193,10 +111,80 @@
             }
           },
           {
-            "title": "BROWNOUT",
+            "title": "Torreta",
+            "x": 768.0,
+            "y": 384.0,
+            "width": 128.0,
+            "height": 128.0,
+            "type": "Boolean Box",
+            "properties": {
+              "topic": "/SmartDashboard/Match/Torreta apuntada",
+              "period": 0.06,
+              "true_color": 4283215696,
+              "false_color": 4287137928
+            }
+          },
+          {
+            "title": "Flywheels",
+            "x": 896.0,
+            "y": 384.0,
+            "width": 128.0,
+            "height": 128.0,
+            "type": "Boolean Box",
+            "properties": {
+              "topic": "/SmartDashboard/Match/Flywheels listos",
+              "period": 0.06,
+              "true_color": 4283215696,
+              "false_color": 4287137928
+            }
+          },
+          {
+            "title": "PASE",
+            "x": 1024.0,
+            "y": 384.0,
+            "width": 128.0,
+            "height": 128.0,
+            "type": "Boolean Box",
+            "properties": {
+              "topic": "/SmartDashboard/Match/PASE (zona neutral)",
+              "period": 0.06,
+              "true_color": 4294940672,
+              "false_color": 4287137928
+            }
+          },
+          {
+            "title": "Odometria",
+            "x": 1152.0,
+            "y": 384.0,
+            "width": 128.0,
+            "height": 128.0,
+            "type": "Boolean Box",
+            "properties": {
+              "topic": "/SmartDashboard/Match/Odometria fresca",
+              "period": 0.06,
+              "true_color": 4283215696,
+              "false_color": 4294198070
+            }
+          },
+          {
+            "title": "Limelight",
             "x": 1280.0,
-            "y": 512.0,
-            "width": 256.0,
+            "y": 384.0,
+            "width": 128.0,
+            "height": 128.0,
+            "type": "Boolean Box",
+            "properties": {
+              "topic": "/SmartDashboard/Match/Limelight OK",
+              "period": 0.06,
+              "true_color": 4283215696,
+              "false_color": 4294198070
+            }
+          },
+          {
+            "title": "Brownout",
+            "x": 1408.0,
+            "y": 384.0,
+            "width": 128.0,
             "height": 128.0,
             "type": "Boolean Box",
             "properties": {
@@ -205,32 +193,20 @@
               "true_color": 4294198070,
               "false_color": 4287137928
             }
-          },
-          {
-            "title": "FMS",
-            "x": 1536.0,
-            "y": 512.0,
-            "width": 384.0,
-            "height": 128.0,
-            "type": "FMSInfo",
-            "properties": {
-              "topic": "/FMSInfo",
-              "period": 0.06
-            }
           }
         ]
       }
     },
     {
-      "name": "Diagnóstico",
+      "name": "Diagnostico",
       "grid_layout": {
         "layouts": [],
         "containers": [
           {
-            "title": "Error torreta (°)",
+            "title": "Error torreta (deg)",
             "x": 0.0,
             "y": 0.0,
-            "width": 640.0,
+            "width": 512.0,
             "height": 256.0,
             "type": "Graph",
             "properties": {
@@ -239,10 +215,10 @@
             }
           },
           {
-            "title": "Error rumbo (°)",
-            "x": 640.0,
+            "title": "Error rumbo (deg)",
+            "x": 512.0,
             "y": 0.0,
-            "width": 640.0,
+            "width": 512.0,
             "height": 256.0,
             "type": "Graph",
             "properties": {
@@ -252,9 +228,9 @@
           },
           {
             "title": "Distancia (m)",
-            "x": 1280.0,
+            "x": 1024.0,
             "y": 0.0,
-            "width": 640.0,
+            "width": 512.0,
             "height": 256.0,
             "type": "Graph",
             "properties": {
@@ -263,14 +239,14 @@
             }
           },
           {
-            "title": "Torreta",
+            "title": "Estado",
             "x": 0.0,
             "y": 256.0,
             "width": 512.0,
             "height": 128.0,
             "type": "Text Display",
             "properties": {
-              "topic": "/SmartDashboard/Match/Torreta",
+              "topic": "/SmartDashboard/Match/Estado",
               "period": 0.06
             }
           },
@@ -287,57 +263,41 @@
             }
           },
           {
-            "title": "Chasis asistido",
+            "title": "Sin ver tag s",
             "x": 768.0,
             "y": 256.0,
             "width": 256.0,
             "height": 128.0,
-            "type": "Boolean Box",
+            "type": "Text Display",
             "properties": {
-              "topic": "/SmartDashboard/Match/Chasis asistido",
-              "period": 0.06,
-              "true_color": 4283215696,
-              "false_color": 4287137928
+              "topic": "/SmartDashboard/Match/Sin ver tag s",
+              "period": 0.06
             }
           },
           {
-            "title": "Cargando",
+            "title": "Latencia ms",
             "x": 1024.0,
             "y": 256.0,
             "width": 256.0,
             "height": 128.0,
-            "type": "Boolean Box",
+            "type": "Text Display",
             "properties": {
-              "topic": "/SmartDashboard/Match/Cargando",
-              "period": 0.06,
-              "true_color": 4283215696,
-              "false_color": 4287137928
+              "topic": "/SmartDashboard/Match/Latencia ms",
+              "period": 0.06
             }
           },
           {
-            "title": "Modo precisión",
+            "title": "Tag a la vista",
             "x": 1280.0,
             "y": 256.0,
             "width": 256.0,
             "height": 128.0,
             "type": "Boolean Box",
             "properties": {
-              "topic": "/SmartDashboard/Match/Modo precision",
+              "topic": "/SmartDashboard/Match/Tag a la vista",
               "period": 0.06,
               "true_color": 4283215696,
               "false_color": 4287137928
-            }
-          },
-          {
-            "title": "Compensación mov °",
-            "x": 1536.0,
-            "y": 256.0,
-            "width": 384.0,
-            "height": 128.0,
-            "type": "Text Display",
-            "properties": {
-              "topic": "/SmartDashboard/Match/Compensacion mov deg",
-              "period": 0.06
             }
           },
           {
@@ -381,10 +341,10 @@
             }
           },
           {
-            "title": "Último rechazo",
+            "title": "Ultimo rechazo",
             "x": 768.0,
             "y": 384.0,
-            "width": 768.0,
+            "width": 512.0,
             "height": 128.0,
             "type": "Text Display",
             "properties": {
@@ -393,101 +353,15 @@
             }
           },
           {
-            "title": "Tag ID",
-            "x": 1536.0,
+            "title": "FMS",
+            "x": 1280.0,
             "y": 384.0,
             "width": 256.0,
             "height": 128.0,
-            "type": "Text Display",
+            "type": "FMSInfo",
             "properties": {
-              "topic": "/SmartDashboard/Match/Tag ID",
+              "topic": "/FMSInfo",
               "period": 0.06
-            }
-          },
-          {
-            "title": "Velocidad campo m/s",
-            "x": 0.0,
-            "y": 512.0,
-            "width": 256.0,
-            "height": 128.0,
-            "type": "Text Display",
-            "properties": {
-              "topic": "/SmartDashboard/Match/Velocidad campo mps",
-              "period": 0.06
-            }
-          },
-          {
-            "title": "Compensación mov m",
-            "x": 256.0,
-            "y": 512.0,
-            "width": 256.0,
-            "height": 128.0,
-            "type": "Text Display",
-            "properties": {
-              "topic": "/SmartDashboard/Match/Compensacion mov m",
-              "period": 0.06
-            }
-          },
-          {
-            "title": "Pipeline",
-            "x": 512.0,
-            "y": 512.0,
-            "width": 256.0,
-            "height": 128.0,
-            "type": "Text Display",
-            "properties": {
-              "topic": "/SmartDashboard/Match/Pipeline",
-              "period": 0.06
-            }
-          },
-          {
-            "title": "Distancia m",
-            "x": 768.0,
-            "y": 512.0,
-            "width": 256.0,
-            "height": 128.0,
-            "type": "Text Display",
-            "properties": {
-              "topic": "/SmartDashboard/Match/Distancia m",
-              "period": 0.06
-            }
-          },
-          {
-            "title": "Sin ver tag s",
-            "x": 1024.0,
-            "y": 512.0,
-            "width": 256.0,
-            "height": 128.0,
-            "type": "Text Display",
-            "properties": {
-              "topic": "/SmartDashboard/Match/Sin ver tag s",
-              "period": 0.06
-            }
-          },
-          {
-            "title": "Latencia ms",
-            "x": 1280.0,
-            "y": 512.0,
-            "width": 256.0,
-            "height": 128.0,
-            "type": "Text Display",
-            "properties": {
-              "topic": "/SmartDashboard/Match/Latencia ms",
-              "period": 0.06
-            }
-          },
-          {
-            "title": "Tag a la vista",
-            "x": 1536.0,
-            "y": 512.0,
-            "width": 256.0,
-            "height": 128.0,
-            "type": "Boolean Box",
-            "properties": {
-              "topic": "/SmartDashboard/Match/Tag a la vista",
-              "period": 0.06,
-              "true_color": 4283215696,
-              "false_color": 4287137928
             }
           }
         ]
@@ -788,7 +662,7 @@
       }
     },
     {
-      "name": "Diagnóstico Demo",
+      "name": "Diagnostico Demo",
       "grid_layout": {
         "layouts": [],
         "containers": [
