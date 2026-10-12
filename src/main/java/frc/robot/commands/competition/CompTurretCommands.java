@@ -94,8 +94,19 @@ public final class CompTurretCommands {
                     // Solución de tiro compartida con el cañón fijo y el chasis.
                     Pose2d pose = drive.getPose();
                     Translation2d target = CompetitionState.getActiveTarget(pose);
+
+                    // Origen del tiro: en STRIKER la torreta es el único cañón
+                    // y dispara desde SU eje, no desde el centro del robot, así
+                    // que distancia y compensación se miden desde ahí. En BOMBER
+                    // se queda el centro del robot para seguir dando el mismo
+                    // número que el cañón fijo y el rumbo del chasis.
+                    Pose2d shotOrigin = CompetitionState.isBomber()
+                            ? pose
+                            : Turret.getPivotFieldPose(pose);
+                    Logger.recordOutput("Match/Turret/PivotPose", Turret.getPivotFieldPose(pose));
+
                     ShotSolution shot = ShotSolution.compute(
-                            pose, drive.getFieldRelativeVelocity(), target);
+                            shotOrigin, drive.getFieldRelativeVelocity(), target);
                     shot.log();
 
                     double distance = shot.distanceMeters;
@@ -119,7 +130,7 @@ public final class CompTurretCommands {
 
                     } else {
                         // STRIKER: apuntado continuo por odometría.
-                        boolean tooClose = pose.getTranslation().getDistance(target)
+                        boolean tooClose = shotOrigin.getTranslation().getDistance(target)
                                 < CompetitionConstants.turretAimMinDistanceMeters;
 
                         if (tooClose) {

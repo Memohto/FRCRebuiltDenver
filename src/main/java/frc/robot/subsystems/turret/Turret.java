@@ -106,6 +106,23 @@ public class Turret extends Shooter {
     return pivot.plus(DemoConstants.turretPivotToCamera);
   }
 
+  /**
+   * Posición en el campo del eje de giro de la torreta.
+   *
+   * <p>
+   * Es el origen real del tiro de la torreta: de aquí se mide el rumbo y la
+   * distancia al HUB.
+   */
+  public static Translation2d getPivotFieldPosition(Pose2d robotPose) {
+    return robotPose.getTranslation().plus(
+        TurretConstants.robotToTurretPivot2d.rotateBy(robotPose.getRotation()));
+  }
+
+  /** Pose "virtual" con el origen en el eje de la torreta y el rumbo del robot. */
+  public static Pose2d getPivotFieldPose(Pose2d robotPose) {
+    return new Pose2d(getPivotFieldPosition(robotPose), robotPose.getRotation());
+  }
+
   public static double computeTurretAngleRad(Pose2d robotPose, Translation2d fieldTarget) {
     return computeTurretAngleRad(robotPose, fieldTarget, 0.0);
   }
@@ -127,9 +144,14 @@ public class Turret extends Shooter {
    */
   public static double computeTurretAngleRad(
       Pose2d robotPose, Translation2d fieldTarget, double aimOffsetRad) {
-    double dx = fieldTarget.getX() - robotPose.getX();
-    double dy = fieldTarget.getY() - robotPose.getY();
-    double worldAngle = Math.atan2(dy, dx) + aimOffsetRad;
+    // El rumbo se calcula desde el EJE DE LA TORRETA, no desde el centro del
+    // robot. Antes se usaba robotPose directo y eso metía un paralaje que
+    // variaba con la distancia y el rumbo (el "ligero desfase" al HUB).
+    Translation2d pivot = getPivotFieldPosition(robotPose);
+    double dx = fieldTarget.getX() - pivot.getX();
+    double dy = fieldTarget.getY() - pivot.getY();
+    double worldAngle = Math.atan2(dy, dx) + aimOffsetRad
+        + Math.toRadians(TurretConstants.turretAimTrimDeg);
     double robotHeading = robotPose.getRotation().getRadians();
 
     double rawAngle = worldAngle - robotHeading - TurretConstants.turretZeroOffsetRad;

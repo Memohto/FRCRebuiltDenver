@@ -195,7 +195,7 @@ public class RobotContainer {
         Commands.run(() -> {
           boolean isRedAlliance = DriverStation.getAlliance().isPresent()
               && DriverStation.getAlliance().get() == Alliance.Red;
-          double distanceM = Drive.getDistanceToTargetMeters(drive.getPose(),
+          double distanceM = Drive.getDistanceToTargetMeters(Turret.getPivotFieldPose(drive.getPose()),
               isRedAlliance ? RobotConstants.redHub : RobotConstants.blueHub);
           double angle = Turret.computeTurretAngleRad(drive.getPose(),
               isRedAlliance ? RobotConstants.redHub : RobotConstants.blueHub);
