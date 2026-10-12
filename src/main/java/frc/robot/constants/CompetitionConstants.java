@@ -349,8 +349,10 @@ public final class CompetitionConstants {
      * cámbiala aquí. El .local puede no resolver en el FMS.
      */
     public static final String[] limelightStreamUrls = {
-        "http://10.67.2.11:5800/stream.mjpg",
-        "http://limelight-fixed.local:5800/stream.mjpg"
+        // La Limelight sirve el MJPEG en la RAÍZ del puerto 5800 (no /stream.mjpg).
+        "http://10.67.2.11:5800",            // IP actual (asignada por DHCP del radio)
+        "http://limelight-fixed.local:5800", // por nombre: funciona en el taller
+        "http://10.67.2.11:5800"             // si se le fija la IP estática recomendada
     };
 
     /**
