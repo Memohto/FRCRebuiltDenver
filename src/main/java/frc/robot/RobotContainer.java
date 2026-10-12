@@ -720,11 +720,15 @@ public class RobotContainer {
 
     // ── Alimentar con la Y-valve ───────────────────────────────────────────
 
+    // Con compuerta: la Y-valve espera a que el flywheel se recupere entre
+    // pelotas (ShotConstants.feedGate*).
     indexer.setDefaultCommand(
-        IndexerCommands.joystickIndexerCmd(
+        IndexerCommands.gatedIndexerCmd(
             indexer,
             feedShooterTrigger::getAsBoolean,
-            feedTurretTrigger::getAsBoolean));
+            feedTurretTrigger::getAsBoolean,
+            shooter::isReadyToFeed,
+            turret::isReadyToFeed));
 
     // ── Agitación ──────────────────────────────────────────────────────────
 

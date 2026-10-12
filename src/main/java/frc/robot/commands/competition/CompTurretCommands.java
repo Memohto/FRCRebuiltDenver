@@ -100,9 +100,13 @@ public final class CompTurretCommands {
                     // que distancia y compensación se miden desde ahí. En BOMBER
                     // se queda el centro del robot para seguir dando el mismo
                     // número que el cañón fijo y el rumbo del chasis.
-                    Pose2d shotOrigin = CompetitionState.isBomber()
-                            ? pose
-                            : Turret.getPivotFieldPose(pose);
+                    //
+                    // CORRECCIÓN: el mapa de Denver se calibró con la distancia
+                    // desde el CENTRO del robot. Medirla desde el eje la movía
+                    // hasta ±24 cm según la orientación. El ÁNGULO sigue saliendo
+                    // del eje (computeTurretAngleRad); la distancia vuelve a ser
+                    // la de Denver hasta que se recalibre el mapa.
+                    Pose2d shotOrigin = pose;
                     Logger.recordOutput("Match/Turret/PivotPose", Turret.getPivotFieldPose(pose));
 
                     ShotSolution shot = ShotSolution.compute(

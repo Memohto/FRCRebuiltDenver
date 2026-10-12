@@ -35,6 +35,7 @@ public class HeadingController {
     private final double toleranceRad;
     private final double softZoneRad;
     private final double maxOmegaRadPerSec;
+    private final double ksRadPerSec;
 
     private double lastError = 0.0;
     private double filteredDerivative = 0.0;
@@ -56,6 +57,24 @@ public class HeadingController {
             double toleranceRad,
             double softZoneRad,
             double maxOmegaRadPerSec) {
+        this(kp, kd, derivativeAlpha, toleranceRad, softZoneRad, maxOmegaRadPerSec, 0.0);
+    }
+
+    /**
+     * @param ksRadPerSec Velocidad angular mínima fuera de la tolerancia (kS).
+     *                    Vence la fricción del swerve: sin esto, con errores de
+     *                    1-4° el P pide tan poquito que el chasis no gira y se
+     *                    queda chueco para siempre.
+     */
+    public HeadingController(
+            double kp,
+            double kd,
+            double derivativeAlpha,
+            double toleranceRad,
+            double softZoneRad,
+            double maxOmegaRadPerSec,
+            double ksRadPerSec) {
+        this.ksRadPerSec = Math.abs(ksRadPerSec);
         this.kp = kp;
         this.kd = kd;
         this.derivativeAlpha = derivativeAlpha;
@@ -89,6 +108,13 @@ public class HeadingController {
                 (Math.abs(errorRad) - toleranceRad) / Math.max(softZoneRad, 1.0e-6),
                 0.0, 1.0);
         output *= gate;
+
+        // kS: fuera de la tolerancia siempre hay al menos un empujón mínimo en
+        // la dirección del error, escalado por la misma compuerta para no
+        // meter un escalón en el borde de la tolerancia.
+        if (Math.abs(errorRad) > toleranceRad) {
+            output += Math.copySign(ksRadPerSec * gate, errorRad);
+        }
 
         return MathUtil.clamp(output, -maxOmegaRadPerSec, maxOmegaRadPerSec);
     }

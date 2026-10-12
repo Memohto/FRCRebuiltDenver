@@ -15,7 +15,7 @@ public class ShooterConstants {
             .withKV(0.12)  // Feedforward: volts per RPS. This does ~95% of the work.
                            // If flywheel overshoots target speed → lower kV slightly.
                            // If flywheel falls short and never catches up → raise kV.
-            .withKP(0.10)  // Proportional: trims steady-state error left by kV.
+            .withKP(0.25)  // Proportional (0.10 en Denver; subido para recuperar más rápido entre pelotas): trims steady-state error left by kV.
                            // Raise slowly if there's still a small gap at target speed.
                            // Lower if you hear oscillation/hunting at steady state.
             .withKI(0.0)
@@ -66,10 +66,10 @@ public class ShooterConstants {
     public static final InterpolatingDoubleTreeMap kShooterFlywheelMap = new InterpolatingDoubleTreeMap();
     static {
         kShooterFlywheelMap.put(1.0, 33.0);  // was 0.33
-        kShooterFlywheelMap.put(2.0, 33.0);  // was 0.37
-        kShooterFlywheelMap.put(3.0, 39.0);  // was 0.41
-        kShooterFlywheelMap.put(4.0, 42.0);  // was 0.46
-        kShooterFlywheelMap.put(5.0, 45.0);  // was 0.52
-        // kShooterFlywheelMap.put(6.0, 100.0); // was 1.0 — uncomment when ready
+        kShooterFlywheelMap.put(2.0, 37.0);  // was 0.37
+        kShooterFlywheelMap.put(3.0, 41.0);  // was 0.41
+        kShooterFlywheelMap.put(4.0, 46.0);  // was 0.46
+        kShooterFlywheelMap.put(5.0, 50.0);  // was 0.52
+        kShooterFlywheelMap.put(6.0, 56.0); // was 1.0 — uncomment when ready
     }
 }

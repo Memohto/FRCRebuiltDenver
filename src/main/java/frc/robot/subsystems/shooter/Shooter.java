@@ -47,6 +47,10 @@ public class Shooter extends SubsystemBase {
     private double lastHoodDeg = Double.NaN;
     private double lastFlywheelRadPerSec = Double.NaN;
 
+    /** Compuerta de alimentación: ¿el flywheel se está recuperando de un tiro? */
+    private boolean flywheelRecovering = false;
+    private double recoveringSince = 0.0;
+
     public Shooter(ShooterIO io) {
         this.io = io;
     }
@@ -68,6 +72,41 @@ public class Shooter extends SubsystemBase {
         double velocityError = inputs.flywheelTargetVelocityRadPerSec - inputs.flywheelVelocityRadPerSec;
         Logger.recordOutput(logKey + "/FlywheelVelocityErrorRadPerSec", velocityError);
         Logger.recordOutput(logKey + "/FlywheelAtSpeed", isFlywheelAtSpeed());
+
+        updateFeedGate();
+        Logger.recordOutput(logKey + "/FeedGateRecovering", flywheelRecovering);
+        Logger.recordOutput(logKey + "/FlywheelVelocityErrorRPS", Units.radiansToRotations(velocityError));
+    }
+
+    /** Histéresis de la compuerta: pausa al caer, reanuda al recuperarse. */
+    private void updateFeedGate() {
+        double now = edu.wpi.first.wpilibj.Timer.getFPGATimestamp();
+        double targetRPS = Units.radiansToRotations(inputs.flywheelTargetVelocityRadPerSec);
+        double deficitRPS = targetRPS - Units.radiansToRotations(inputs.flywheelVelocityRadPerSec);
+
+        if (!ShotConstants.feedGateEnabled || targetRPS <= 0.0 || DriverStation.isDisabled()) {
+            flywheelRecovering = false;
+            return;
+        }
+        if (!flywheelRecovering && deficitRPS > ShotConstants.feedGatePauseBelowRPS) {
+            flywheelRecovering = true;
+            recoveringSince = now;
+        } else if (flywheelRecovering
+                && (deficitRPS < ShotConstants.feedGateResumeWithinRPS
+                        || now - recoveringSince > ShotConstants.feedGateMaxPauseSeconds)) {
+            flywheelRecovering = false;
+        }
+    }
+
+    /**
+     * ¿Se puede meter la siguiente pelota a este cañón?
+     *
+     * <p>
+     * {@code true} si el flywheel está apagado (la compuerta no estorba en
+     * otros modos) o si ya se recuperó del tiro anterior.
+     */
+    public boolean isReadyToFeed() {
+        return !flywheelRecovering;
     }
 
     // ── Flywheel ──────────────────────────────────────────────────────────────

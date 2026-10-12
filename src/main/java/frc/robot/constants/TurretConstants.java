@@ -69,5 +69,5 @@ public class TurretConstants {
      * si el error cambia con la distancia o el lado del campo, es geometría.
      * Si la pelota cae a la DERECHA del HUB, súbelo; a la IZQUIERDA, bájalo.
      */
-    public static final double turretAimTrimDeg = 0.0;
+    public static final double turretAimTrimDeg = -5.0;
 }

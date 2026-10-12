@@ -133,16 +133,35 @@ public final class CompetitionConstants {
     public static final double headingDerivativeAlpha = 0.15;
 
     /** Dentro de esta tolerancia el controlador no comanda nada. */
-    public static final double headingToleranceRad = Math.toRadians(1.0);
+    public static final double headingToleranceRad = Math.toRadians(0.5);
 
     /**
      * Ancho de la rampa suave arriba de la tolerancia. La salida se escala de 0
      * a 1 a lo largo de esta zona en vez de cortarse de golpe.
      */
-    public static final double headingSoftZoneRad = Math.toRadians(3.0);
+    public static final double headingSoftZoneRad = Math.toRadians(1.0);
 
     /** Velocidad angular máxima que puede pedir la asistencia, en rad/s. */
     public static final double headingMaxOmegaRadPerSec = 5.0;
+
+    /**
+     * Velocidad angular mínima (rad/s) que pide la asistencia fuera de la
+     * tolerancia. Antes, con tolerancia 1° + rampa de 3°, un error de 2° pedía
+     * ~0.03 rad/s: el chasis no se movía y el robot se quedaba 2-4° chueco.
+     * Si el robot oscila alrededor del objetivo, bajarlo (0.15); si se queda
+     * corto, subirlo (0.4).
+     */
+    public static final double headingKsRadPerSec = 0.15;
+
+    /**
+     * Trim angular del modo BOMBER, en grados (CCW positivo visto desde arriba).
+     * Sólo para errores CONSTANTES que quedan después de calibrar el yaw de la
+     * Limelight (VisionConstants.limelightFixedYawTrimDeg). Los cañones miran
+     * hacia atrás: si la pelota cae a la IZQUIERDA del HUB (visto desde
+     * detrás del cañón, mirando hacia el HUB), BÁJALO (negativo); si cae a la
+     * derecha, súbelo. Mismo criterio que TurretConstants.turretAimTrimDeg.
+     */
+    public static final double bomberAimTrimDeg = -3.0;
 
     /**
      * Distancia mínima al objetivo para calcular un rumbo por odometría.

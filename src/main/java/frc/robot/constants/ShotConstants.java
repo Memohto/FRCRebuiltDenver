@@ -162,4 +162,30 @@ public final class ShotConstants {
      * deriva poco y disparar a la última pose conocida es mejor que no disparar.
      */
     public static final double odometryTrustSeconds = 8.0;
+
+    // ════════════════════════════════════════════════════════════════════════
+    // Compuerta de alimentación (esperar a que el flywheel se recupere)
+    // ════════════════════════════════════════════════════════════════════════
+    //
+    // Cada pelota le roba velocidad al flywheel. Si la siguiente entra antes de
+    // que se recupere, sale con menos potencia y se queda corta — y se nota más
+    // de lejos, donde el mapa pide más RPS. Con la compuerta, la Y-valve se
+    // pausa mientras ESE flywheel está por debajo de su objetivo y reanuda en
+    // cuanto se recupera. Sólo actúa con el flywheel encendido (objetivo > 0).
+
+    /** Interruptor maestro. false = alimentar como antes, sin esperar. */
+    public static final boolean feedGateEnabled = true;
+
+    /** Pausar si el flywheel cae más de esto por debajo de su objetivo (RPS). */
+    public static final double feedGatePauseBelowRPS = 3.0;
+
+    /** Reanudar cuando vuelva a estar dentro de esto (RPS). Histéresis. */
+    public static final double feedGateResumeWithinRPS = 1.5;
+
+    /**
+     * Pausa máxima, en segundos. Red de seguridad: si el kV está mal y el
+     * flywheel nunca llega a ±1.5 RPS, se alimenta de todos modos en vez de
+     * quedarse trabado sin disparar.
+     */
+    public static final double feedGateMaxPauseSeconds = 0.5;
 }

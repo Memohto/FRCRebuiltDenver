@@ -51,8 +51,27 @@ public class VisionConstants {
    * visión aparece corrida hacia un lado fijo, la traslación está mal; si se
    * mueve al girar el robot, el yaw está mal.
    */
+  /**
+   * Corrección del yaw de montaje de la Limelight fija, en grados.
+   *
+   * <p>
+   * El código asume que la cámara mira EXACTAMENTE hacia atrás (π). Un par de
+   * grados de chueco en el montaje se convierten 1:1 en grados de error de
+   * rumbo del robot (MegaTag1 siembra el rumbo con esto) y en error lateral de
+   * la posición de MegaTag2. Es la causa más probable de que BOMBER y la
+   * torreta apunten chueco hacia el mismo lado.
+   *
+   * <p>
+   * Calibración: robot cuadrado contra la pared de la alianza (rumbo real
+   * conocido: 0° azul / 180° rojo, según el lado), deshabilitado, viendo tags.
+   * Lee el rumbo de la pose en AdvantageScope/Elastic. Súmale a este trim
+   * (rumbo reportado − rumbo real). Redeploy y repetir hasta &lt; 0.5°.
+   */
+  public static double limelightFixedYawTrimDeg = 0.0;
+
   public static Transform3d robotToLimelightFixed =
-      new Transform3d(-0.25, 0.0, 0.25, new Rotation3d(0.0, Math.toRadians(-20.0), Math.PI));
+      new Transform3d(-0.25, 0.0, 0.25, new Rotation3d(0.0, Math.toRadians(-20.0),
+          Math.PI + Math.toRadians(limelightFixedYawTrimDeg)));
 
   /**
    * Publicar {@link #robotToLimelightFixed} desde el código al arrancar.
@@ -146,6 +165,16 @@ public class VisionConstants {
 
   /** Cada cuánto se permite re-sembrar, en segundos. */
   public static double headingSeedPeriodSeconds = 0.5;
+
+  /** Muestras MT1 que se promedian para sembrar el rumbo (~25 fps → ~1.5 s). */
+  public static final int headingSeedWindow = 40;
+
+  /** Mínimo de muestras en la ventana antes de sembrar. */
+  public static final int headingSeedMinSamples = 10;
+
+  /** Si una muestra nueva se aleja del promedio más que esto, se vacía la ventana. */
+  public static final double headingSeedResetMeters = 0.15;
+  public static final double headingSeedResetDeg = 5.0;
 
   // ══════════════════════════════════════════════════════════════════════════
   // Otras cámaras

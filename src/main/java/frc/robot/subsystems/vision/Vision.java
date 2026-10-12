@@ -82,6 +82,46 @@ public class Vision extends SubsystemBase {
   private double lastSeedTimestamp = -1000.0;
   private boolean seededThisCycle = false;
 
+  // Ventana de muestras MT1 para promediar la siembra.
+  private final Pose2d[] seedSamples = new Pose2d[VisionConstants.headingSeedWindow];
+  private int seedCount = 0;
+  private int seedNext = 0;
+
+  /**
+   * Agrega una muestra MT1. Si el robot se movió (lo están acomodando antes del
+   * partido), la ventana se vacía para no promediar dos posiciones distintas.
+   */
+  private void addSeedSample(Pose2d sample) {
+    if (seedCount > 0) {
+      Pose2d mean = averagedSeed();
+      boolean moved =
+          mean.getTranslation().getDistance(sample.getTranslation())
+                  > VisionConstants.headingSeedResetMeters
+              || Math.abs(mean.getRotation().minus(sample.getRotation()).getDegrees())
+                  > VisionConstants.headingSeedResetDeg;
+      if (moved) {
+        seedCount = 0;
+        seedNext = 0;
+      }
+    }
+    seedSamples[seedNext] = sample;
+    seedNext = (seedNext + 1) % seedSamples.length;
+    seedCount = Math.min(seedCount + 1, seedSamples.length);
+  }
+
+  /** Promedio de posición y promedio CIRCULAR de rumbo de la ventana. */
+  private Pose2d averagedSeed() {
+    double x = 0.0, y = 0.0, c = 0.0, sn = 0.0;
+    for (int i = 0; i < seedCount; i++) {
+      Pose2d p = seedSamples[i];
+      x += p.getX();
+      y += p.getY();
+      c += p.getRotation().getCos();
+      sn += p.getRotation().getSin();
+    }
+    return new Pose2d(x / seedCount, y / seedCount, new Rotation2d(c, sn));
+  }
+
   // ── Diagnóstico ──────────────────────────────────────────────────────────
   private String lastRejectReason = "—";
   private double lastAcceptedTimestamp = -1000.0;
@@ -418,15 +458,24 @@ public class Vision extends SubsystemBase {
         // Va ANTES de mandar la observación al estimador: setPose reinicia el
         // estimador con posición y rumbo, y la observación de después sólo lo
         // refina.
+        // Se siembra con el PROMEDIO de las últimas muestras, no con la última:
+        // el yaw de MegaTag1 con un solo tag a 3-4 m brinca ±2-3°, y antes el
+        // rumbo de todo el partido quedaba en lo que dijera la última muestra.
         if (headingSeeder != null
             && DriverStation.isDisabled()
-            && observation.type() == PoseObservationType.MEGATAG_1
-            && edu.wpi.first.wpilibj.Timer.getFPGATimestamp() - lastSeedTimestamp
-                > VisionConstants.headingSeedPeriodSeconds) {
-          headingSeeder.accept(observation.pose().toPose2d());
-          lastSeedTimestamp = edu.wpi.first.wpilibj.Timer.getFPGATimestamp();
-          seededThisCycle = true;
-          Logger.recordOutput("Vision/HeadingSeedPose", observation.pose().toPose2d());
+            && observation.type() == PoseObservationType.MEGATAG_1) {
+          addSeedSample(observation.pose().toPose2d());
+          if (edu.wpi.first.wpilibj.Timer.getFPGATimestamp() - lastSeedTimestamp
+                  > VisionConstants.headingSeedPeriodSeconds
+              && seedCount >= VisionConstants.headingSeedMinSamples) {
+            Pose2d seed = averagedSeed();
+            headingSeeder.accept(seed);
+            lastSeedTimestamp = edu.wpi.first.wpilibj.Timer.getFPGATimestamp();
+            seededThisCycle = true;
+            Logger.recordOutput("Vision/HeadingSeedPose", seed);
+            Logger.recordOutput("Vision/HeadingSeedSamples", seedCount);
+            Logger.recordOutput("Vision/HeadingSeedDeg", seed.getRotation().getDegrees());
+          }
         }
 
         // Calculate standard deviations

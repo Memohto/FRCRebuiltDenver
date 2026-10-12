@@ -107,7 +107,8 @@ public final class CompDriveCommands {
                 CompetitionConstants.headingDerivativeAlpha,
                 CompetitionConstants.headingToleranceRad,
                 CompetitionConstants.headingSoftZoneRad,
-                CompetitionConstants.headingMaxOmegaRadPerSec);
+                CompetitionConstants.headingMaxOmegaRadPerSec,
+                CompetitionConstants.headingKsRadPerSec);
 
         TargetHeading targetHeading = new TargetHeading();
 
@@ -241,7 +242,9 @@ public final class CompDriveCommands {
             Logger.recordOutput("Match/Drive/AimOffsetDeg", Math.toDegrees(shot.aimOffsetRad));
 
             double desired = toTarget.getAngle().plus(Rotation2d.k180deg).getRadians()
-                    + shot.aimOffsetRad;
+                    + shot.aimOffsetRad
+                    + Math.toRadians(CompetitionConstants.bomberAimTrimDeg);
+            Logger.recordOutput("Match/Drive/HubTarget", target);
 
             if (Double.isNaN(targetHeadingRad)) {
                 targetHeadingRad = desired;

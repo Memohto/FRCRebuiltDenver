@@ -147,6 +147,16 @@ public class RobotConstants {
     public static final double highPriorityFrequencyHz = robotLoopFrequencyHz;
     public static final double lowPriorityFrequencyHz = robotLoopFrequencyHz / 2;
 
-    public static final Translation2d  blueHub = new Translation2d(4.625, 4.035);
-    public static final Translation2d  redHub = new Translation2d(11.917, 4.035);
+    /**
+     * Centro de cada HUB. Se calcula del layout de AprilTags (el mismo marco que
+     * usa la visión) con {@link frc.robot.util.HubLocator}; los números de abajo
+     * sólo son respaldo. La consola del Driver Station imprime cuál se usó.
+     */
+    public static final Translation2d blueHubFallback = new Translation2d(4.625, 4.035);
+    public static final Translation2d redHubFallback = new Translation2d(11.917, 4.035);
+
+    public static final Translation2d blueHub =
+        frc.robot.util.HubLocator.hubCenter(false, blueHubFallback);
+    public static final Translation2d redHub =
+        frc.robot.util.HubLocator.hubCenter(true, redHubFallback);
 }
