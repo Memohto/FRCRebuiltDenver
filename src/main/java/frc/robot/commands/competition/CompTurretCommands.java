@@ -78,6 +78,7 @@ public final class CompTurretCommands {
                         MatchDashboard.turretState = "INACTIVA";
                         MatchDashboard.aiming = false;
                         MatchDashboard.charging = false;
+                        MatchDashboard.passing = false;
                         MatchDashboard.turretOnTarget = false;
                         MatchDashboard.distanceMeters = 0.0;
                         MatchDashboard.turretErrorDeg = 0.0;
@@ -109,8 +110,14 @@ public final class CompTurretCommands {
                     Pose2d shotOrigin = pose;
                     Logger.recordOutput("Match/Turret/PivotPose", Turret.getPivotFieldPose(pose));
 
+                    boolean passing = CompetitionState.isPassing(pose);
+                    MatchDashboard.passing = passing;
+                    // En pase no hay compensación por movimiento: el mapa de
+                    // tiempo de vuelo es del tiro al HUB, no del lob fijo.
                     ShotSolution shot = ShotSolution.compute(
-                            shotOrigin, drive.getFieldRelativeVelocity(), target);
+                            shotOrigin,
+                            passing ? null : drive.getFieldRelativeVelocity(),
+                            target);
                     shot.log();
 
                     double distance = shot.distanceMeters;
@@ -151,7 +158,8 @@ public final class CompTurretCommands {
                         }
                         tracker.apply(turret);
 
-                        String targetName = CompetitionState.isHubTarget() ? "HUB" : "FEEDER";
+                        String targetName = !passing ? "HUB"
+                                : CompetitionState.isHubTarget() ? "PASE auto" : "FEEDER";
                         MatchDashboard.turretState = tooClose
                                 ? targetName + " · muy cerca"
                                 : FieldTracking.isOdometryValid()
@@ -179,8 +187,15 @@ public final class CompTurretCommands {
                     // Mapas de competencia, con la distancia al objetivo VIRTUAL
                     // (ya compensada por movimiento). Con la compensación
                     // apagada es la distancia real, como en Denver.
-                    turret.setHoodForDistance(distance);
-                    turret.setFlywheelVelocityForDistance(distance);
+                    if (passing) {
+                        turret.setHoodPosition(edu.wpi.first.math.geometry.Rotation2d.fromDegrees(
+                                CompetitionConstants.passHoodDeg));
+                        turret.setFlywheelVelocity(edu.wpi.first.math.util.Units.rotationsToRadians(
+                                CompetitionConstants.passFlywheelRPS));
+                    } else {
+                        turret.setHoodForDistance(distance);
+                        turret.setFlywheelVelocityForDistance(distance);
+                    }
                 },
                 turret)
                 .beforeStarting(() -> tracker.reset(turret.getAngleRad()));

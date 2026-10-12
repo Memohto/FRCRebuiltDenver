@@ -49,11 +49,19 @@ public final class CompShooterCommands {
 
                     Pose2d pose = drive.getPose();
                     Translation2d target = CompetitionState.getActiveTarget(pose);
-                    ShotSolution shot = ShotSolution.compute(
-                            pose, drive.getFieldRelativeVelocity(), target);
-
-                    shooter.setHoodForDistance(shot.distanceMeters);
-                    shooter.setFlywheelVelocityForDistance(shot.distanceMeters);
+                    boolean passing = CompetitionState.isPassing(pose);
+                    if (passing) {
+                        shooter.setHoodPosition(edu.wpi.first.math.geometry.Rotation2d.fromDegrees(
+                                frc.robot.constants.CompetitionConstants.passHoodDeg));
+                        shooter.setFlywheelVelocity(edu.wpi.first.math.util.Units.rotationsToRadians(
+                                frc.robot.constants.CompetitionConstants.passFlywheelRPS));
+                    } else {
+                        ShotSolution shot = ShotSolution.compute(
+                                pose, drive.getFieldRelativeVelocity(), target);
+                        shooter.setHoodForDistance(shot.distanceMeters);
+                        shooter.setFlywheelVelocityForDistance(shot.distanceMeters);
+                    }
+                    Logger.recordOutput("Match/FixedShooterPassing", passing);
                     Logger.recordOutput("Match/FixedShooterActive", true);
                 },
                 shooter);

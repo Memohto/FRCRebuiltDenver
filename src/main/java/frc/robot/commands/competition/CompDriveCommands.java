@@ -237,8 +237,9 @@ public final class CompDriveCommands {
             }
 
             // Misma solución de tiro que la torreta y el cañón fijo.
+            boolean passing = CompetitionState.isPassing(pose);
             ShotSolution shot = ShotSolution.compute(
-                    pose, drive.getFieldRelativeVelocity(), target);
+                    pose, passing ? null : drive.getFieldRelativeVelocity(), target);
             Logger.recordOutput("Match/Drive/AimOffsetDeg", Math.toDegrees(shot.aimOffsetRad));
 
             double desired = toTarget.getAngle().plus(Rotation2d.k180deg).getRadians()

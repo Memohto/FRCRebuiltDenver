@@ -104,4 +104,7 @@ wpi.java.configureTestTasks(test)
 // Configure string concat to always inline compile
 tasks.withType(JavaCompile) {
     options.compilerArgs.add '-XDstringConcat=inline'
+    // Los fuentes están en UTF-8. Sin esto, javac en Windows usa cp1252 y los
+    // acentos / flechas llegan al dashboard como "â†’", "Ã­", etc.
+    options.encoding = 'UTF-8'
 }

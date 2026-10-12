@@ -62,7 +62,7 @@ public final class CompetitionConstants {
      * Velocidad máxima de traslación como fracción de
      * {@code TunerConstants.kSpeedAt12Volts}. 1.0 = todo lo que da el chasis.
      */
-    public static final double maxSpeedFraction = 1.0;
+    public static final double maxSpeedFraction = 0.8; // era 1.0; -20 % (2026-10-12)
 
     /** Fracción de velocidad en modo precisión (LT del piloto). */
     public static final double precisionSpeedFraction = 0.30;
@@ -275,6 +275,41 @@ public final class CompetitionConstants {
      */
     public static final double feederTargetXBlue = 2.0;
     public static final double feederTargetXRed = 14.0;
+
+    // ── Pase automático desde la zona neutral ─────────────────────────────
+
+    /**
+     * Si el robot está del otro lado del HUB (zona neutral, donde no se puede
+     * anotar), al disparar hace un PASE: apunta hacia su driver station (el
+     * mismo punto que FEEDER) con potencia fija baja, en vez de intentar el
+     * HUB. Lo decide sólo con la pose (odometría + visión).
+     *
+     * <p>
+     * Back del operador sigue forzando FEEDER en cualquier lado de la cancha.
+     * false = comportamiento anterior (siempre HUB salvo que se fuerce).
+     */
+    public static final boolean autoPassEnabled = true;
+
+    /**
+     * Frontera de la decisión, medida desde el CENTRO DEL HUB propio hacia la
+     * zona neutral, en metros. Con 0.3 el robot pasa a modo pase cuando su
+     * centro está 30 cm más allá del centro del HUB (alejándose de su pared).
+     * Los tiros desde el trench quedan del lado HUB. Si en algún punto que sí
+     * se puede anotar cambia a pase, súbelo.
+     */
+    public static final double autoPassBoundaryOffsetMeters = 0.3;
+
+    /**
+     * Histéresis alrededor de la frontera: entra a pase en frontera + esto y
+     * regresa a HUB en frontera − esto. Evita que parpadee cerca de la línea.
+     */
+    public static final double autoPassHysteresisMeters = 0.25;
+
+    /** Flywheel fijo del pase, en RPS. TUNEAR en cancha. */
+    public static final double passFlywheelRPS = 32.0;
+
+    /** Hood fijo del pase, en grados del mapa (0 = posición inicial). TUNEAR. */
+    public static final double passHoodDeg = 12.0;
 
     // ════════════════════════════════════════════════════════════════════════
     //

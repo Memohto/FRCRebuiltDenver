@@ -42,6 +42,9 @@ public final class MatchDashboard {
     /** Fuente del rumbo asistido en BOMBER: ODOMETRIA / MANUAL / — */
     public static String alignSource = "—";
 
+    /** ¿El tiro actual es un pase (zona neutral o FEEDER forzado)? */
+    public static boolean passing = false;
+
     // ── Referencias a subsistemas ───────────────────────────────────────────
 
     private static Vision vision = null;
@@ -72,6 +75,7 @@ public final class MatchDashboard {
         fieldSpeedMetersPerSec = 0.0;
         headingErrorDeg = 0.0;
         alignSource = "—";
+        passing = false;
     }
 
     /** ¿Están a velocidad los flywheels que van a disparar en este modo? */
@@ -108,6 +112,15 @@ public final class MatchDashboard {
         SmartDashboard.putString("Match/Modo", CompetitionState.getMode().toString());
         SmartDashboard.putString("Match/Objetivo", CompetitionState.getTarget().toString());
         SmartDashboard.putString("Match/Torreta", turretState);
+
+        // ── Partido ─────────────────────────────────────────────────────────
+        SmartDashboard.putNumber("Match/Bateria V",
+                round(edu.wpi.first.wpilibj.RobotController.getBatteryVoltage(), 2));
+        SmartDashboard.putBoolean("Match/Brownout",
+                edu.wpi.first.wpilibj.RobotController.isBrownedOut());
+        SmartDashboard.putNumber("Match/Tiempo",
+                Math.max(0.0, edu.wpi.first.wpilibj.DriverStation.getMatchTime()));
+        SmartDashboard.putBoolean("Match/PASE (zona neutral)", passing);
 
         // ── Los indicadores grandes ─────────────────────────────────────────
         SmartDashboard.putBoolean("Match/LISTO PARA TIRAR", readyToShoot());
@@ -162,7 +175,8 @@ public final class MatchDashboard {
         StringBuilder sb = new StringBuilder();
         sb.append(CompetitionState.getMode())
                 .append(" → ")
-                .append(CompetitionState.getTarget())
+                .append(passing && CompetitionState.isHubTarget()
+                        ? "PASE" : CompetitionState.getTarget().toString())
                 .append(" · ")
                 .append(turretState);
         if (charging) {

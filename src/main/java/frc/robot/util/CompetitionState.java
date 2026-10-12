@@ -39,6 +39,9 @@ public final class CompetitionState {
     private static RobotMode mode = RobotMode.STRIKER;
     private static CompetitionTarget target = CompetitionTarget.HUB;
 
+    /** Última decisión del pase automático (con histéresis). */
+    private static boolean autoPassActive = false;
+
     private CompetitionState() {
     }
 
@@ -92,6 +95,7 @@ public final class CompetitionState {
     public static void reset() {
         mode = RobotMode.STRIKER;
         target = CompetitionTarget.HUB;
+        autoPassActive = false;
         log();
     }
 
@@ -126,11 +130,57 @@ public final class CompetitionState {
      * que apuntan siempre al mismo punto.
      */
     public static Translation2d getActiveTarget(Pose2d robotPose) {
-        return isHubTarget() ? getHubPosition() : getFeederPosition(robotPose);
+        return isPassing(robotPose) ? getFeederPosition(robotPose) : getHubPosition();
+    }
+
+    /**
+     * ¿El tiro de este momento es un PASE (hacia la driver station, potencia
+     * fija) en vez de un tiro al HUB?
+     *
+     * <ul>
+     * <li>FEEDER forzado con Back → siempre pase.</li>
+     * <li>HUB + {@code autoPassEnabled} → pase si la pose dice que el robot
+     * está en la zona neutral, más allá del HUB propio.</li>
+     * </ul>
+     *
+     * <p>
+     * Torreta, cañón fijo y chasis lo llaman con la misma pose en el mismo
+     * ciclo, así que los tres toman la misma decisión.
+     */
+    public static boolean isPassing(Pose2d robotPose) {
+        if (!isHubTarget()) {
+            return true;
+        }
+        if (!CompetitionConstants.autoPassEnabled) {
+            autoPassActive = false;
+            return false;
+        }
+        // Distancia "hacia la zona neutral" medida desde el centro del HUB
+        // propio: azul crece con X, rojo decrece.
+        double hubX = getHubPosition().getX();
+        double beyondHub = isRedAlliance()
+                ? hubX - robotPose.getX()
+                : robotPose.getX() - hubX;
+        if (!Double.isFinite(beyondHub)) {
+            return autoPassActive;
+        }
+        double boundary = CompetitionConstants.autoPassBoundaryOffsetMeters;
+        double h = CompetitionConstants.autoPassHysteresisMeters;
+        boolean previous = autoPassActive;
+        if (autoPassActive && beyondHub < boundary - h) {
+            autoPassActive = false;
+        } else if (!autoPassActive && beyondHub > boundary + h) {
+            autoPassActive = true;
+        }
+        if (autoPassActive != previous) {
+            Logger.recordOutput("Match/AutoPass", autoPassActive);
+        }
+        return autoPassActive;
     }
 
     public static void log() {
         Logger.recordOutput("Match/Mode", mode);
         Logger.recordOutput("Match/Target", target);
+        Logger.recordOutput("Match/AutoPass", autoPassActive);
     }
 }
